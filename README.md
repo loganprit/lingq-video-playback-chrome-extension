@@ -4,13 +4,14 @@ A private Chrome Manifest V3 extension that keeps LingQ's vocabulary and phrase 
 
 ## What it does
 
-On a LingQ reader page in **Sentence View**, the extension adds a compact playback controller:
+On a supported YouTube-backed LingQ lesson in **Sentence View**, the extension:
 
-- **Pause** — stop at the current sentence boundary.
-- **Continue** — advance to and play the next sentence automatically.
-- **Repeat** — loop the current sentence.
+- presents LingQ's full-video iframe as the visible 16:9 player;
+- cues the active Sentence's exact timestamp bounds paused;
+- keeps LingQ's real interactive Sentence and translation controls beneath it;
+- plays adjacent Sentences immediately through LingQ's native Previous and Next controls.
 
-The controller listens only to LingQ's sentence-specific YouTube iframe. It delegates playback and navigation back to LingQ's own controls rather than replacing the player, transcript, or vocabulary UI.
+The extension drives only the visible player through the documented YouTube IFrame Player API. It does not use LingQ's hidden Sentence player or replace LingQ's reader and vocabulary UI.
 
 ## Keyboard shortcuts
 
@@ -19,10 +20,8 @@ The controller listens only to LingQ's sentence-specific YouTube iframe. It dele
 | `Space` | Play/pause |
 | `N` | Go to the next sentence |
 | `R` | Replay the current sentence once |
-| `C` | Toggle Pause/Continue mode |
-| `A` | Select Continue mode |
 
-Shortcuts are ignored while typing in inputs, text areas, selects, buttons, or editable content.
+Shortcuts are ignored for modified or repeated key presses and while an editable or interactive control owns focus.
 
 ## Install
 

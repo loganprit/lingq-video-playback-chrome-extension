@@ -48,12 +48,71 @@ test("cues initially only when both player and active bounds are valid", () => {
   assert.equal(core.initialCue([{ timestamp: [2, 1] }], "s1", true), null);
 });
 
+test("accepts only same-origin JavaScript-enabled YouTube embeds", () => {
+  const origin = "https://www.lingq.com";
+  const baseUrl = `${origin}/unused`;
+
+  assert.equal(
+    core.youtubeEmbedId(
+      "https://www.youtube.com/embed/LBo8NDfoCCY?enablejsapi=1&origin=https%3A%2F%2Fwww.lingq.com",
+      baseUrl,
+      origin,
+    ),
+    "LBo8NDfoCCY",
+  );
+  assert.equal(
+    core.youtubeEmbedId(
+      "https://www.youtube.com/embed/LBo8NDfoCCY?enablejsapi=1&origin=https%3A%2F%2Fevil.example",
+      baseUrl,
+      origin,
+    ),
+    null,
+  );
+});
+
+test("chooses only available adjacent Sentences", () => {
+  assert.equal(core.adjacentSentence(1, 208, "previous"), null);
+  assert.equal(core.adjacentSentence(1, 208, "next"), 2);
+  assert.equal(core.adjacentSentence(208, 208, "previous"), 207);
+  assert.equal(core.adjacentSentence(208, 208, "next"), null);
+});
+
+test("chooses explicit bounded playback commands", () => {
+  const segment = { start: 4.27, end: 7.13 };
+
+  assert.equal(core.explicitPlayback(core.PLAYER_STATES.PLAYING, 5, segment), "pause");
+  assert.equal(core.explicitPlayback(core.PLAYER_STATES.PAUSED, 5, segment), "play");
+  assert.equal(core.explicitPlayback(core.PLAYER_STATES.ENDED, 7.13, segment), "load");
+  assert.equal(core.explicitPlayback(core.PLAYER_STATES.PAUSED, 0, segment), "load");
+});
+
+test("resolves shortcuts only for an unmodified page-owned key press", () => {
+  assert.equal(core.shortcutAction({ key: "Space" }), "toggle");
+  assert.equal(core.shortcutAction({ key: "N" }), "next");
+  assert.equal(core.shortcutAction({ key: "R" }), "replay");
+
+  for (const blocked of ["modified", "repeat", "editable", "interactive"]) {
+    assert.equal(core.shortcutAction({ key: "R", [blocked]: true }), null);
+  }
+  assert.equal(core.shortcutAction({ key: "X" }), null);
+});
+
 test("accepts only fixed validated player commands", () => {
   const bind = core.bridgeCommand("bind", 3);
   const cue = core.bridgeCommand("cue", 3, { start: 0.55, end: 2.37 });
+  const load = core.bridgeCommand("load", 3, { start: 0.55, end: 2.37 });
 
   assert.deepEqual(core.parseBridgeCommand(bind), bind);
   assert.deepEqual(core.parseBridgeCommand(cue), cue);
+  assert.deepEqual(core.parseBridgeCommand(load), load);
+  assert.deepEqual(
+    core.parseBridgeCommand(core.bridgeCommand("play", 3)),
+    core.bridgeCommand("play", 3),
+  );
+  assert.deepEqual(
+    core.parseBridgeCommand(core.bridgeCommand("pause", 3)),
+    core.bridgeCommand("pause", 3),
+  );
   assert.equal(core.bridgeCommand("seekTo", 3, { start: 0.55, end: 2.37 }), null);
   assert.equal(core.bridgeCommand("bind", 0), null);
   assert.equal(core.bridgeCommand("cue", 3, { start: 2.37, end: 0.55 }), null);
@@ -65,9 +124,11 @@ test("accepts only fixed validated player commands", () => {
 
 test("accepts only current-generation player events", () => {
   const ready = core.bridgeEvent("ready", 4);
+  const state = core.bridgeEvent("state", 4, { state: 1, currentTime: 0.7 });
   const error = core.bridgeEvent("error", 4, { reason: "player-unavailable" });
 
   assert.deepEqual(core.parseBridgeEvent(ready, 4), ready);
+  assert.deepEqual(core.parseBridgeEvent(state, 4), state);
   assert.deepEqual(core.parseBridgeEvent(error, 4), error);
   assert.equal(core.parseBridgeEvent(ready, 5), null);
   assert.equal(core.bridgeEvent("playing", 4), null);

@@ -11,6 +11,14 @@
 
   const SOURCE = "lingq-sentence-playback-companion";
   const VERSION = 1;
+  const PLAYER_STATES = Object.freeze({
+    UNSTARTED: -1,
+    ENDED: 0,
+    PLAYING: 1,
+    PAUSED: 2,
+    BUFFERING: 3,
+    CUED: 5,
+  });
 
   function readerLesson(pathname) {
     const match = String(pathname || "").match(
@@ -49,8 +57,67 @@
     return Array.isArray(value) ? value : null;
   }
 
+  function youtubeEmbedId(value, baseUrl, origin) {
+    try {
+      const url = new URL(value, baseUrl);
+      const youtube = ["www.youtube.com", "youtube.com", "www.youtube-nocookie.com"];
+      const id = url.pathname.match(/^\/embed\/([A-Za-z0-9_-]+)$/)?.[1];
+      return youtube.includes(url.hostname) &&
+        id &&
+        url.searchParams.get("enablejsapi") === "1" &&
+        url.searchParams.get("origin") === origin
+        ? id
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
   function initialCue(sentences, sentenceId, playerAvailable) {
     return playerAvailable ? activeSegment(sentences, sentenceId) : null;
+  }
+
+  function adjacentSentence(sentenceNumber, sentenceCount, direction) {
+    if (
+      !Number.isSafeInteger(sentenceNumber) ||
+      !Number.isSafeInteger(sentenceCount) ||
+      sentenceNumber < 1 ||
+      sentenceCount < 1 ||
+      !["previous", "next"].includes(direction)
+    ) {
+      return null;
+    }
+
+    const target = sentenceNumber + (direction === "next" ? 1 : -1);
+    return target >= 1 && target <= sentenceCount ? target : null;
+  }
+
+  function explicitPlayback(playerState, currentTime, segment) {
+    if (playerState === PLAYER_STATES.PLAYING) return "pause";
+    if (
+      playerState === PLAYER_STATES.ENDED ||
+      !validSegment(segment) ||
+      !Number.isFinite(currentTime) ||
+      currentTime < segment.start ||
+      currentTime >= segment.end
+    ) {
+      return "load";
+    }
+    return "play";
+  }
+
+  function shortcutAction(value) {
+    if (
+      !value ||
+      value.modified ||
+      value.repeat ||
+      value.editable ||
+      value.interactive
+    ) {
+      return null;
+    }
+
+    return { Space: "toggle", N: "next", R: "replay" }[value.key] || null;
   }
 
   function validGeneration(value) {
@@ -70,10 +137,14 @@
   }
 
   function bridgeCommand(type, generation, segment) {
-    if (!validGeneration(generation) || !["bind", "cue"].includes(type)) {
+    if (
+      !validGeneration(generation) ||
+      !["bind", "cue", "load", "play", "pause"].includes(type)
+    ) {
       return null;
     }
-    if (type === "cue" && !validSegment(segment)) return null;
+    const usesSegment = ["cue", "load"].includes(type);
+    if (usesSegment !== Boolean(validSegment(segment))) return null;
 
     return {
       source: SOURCE,
@@ -81,7 +152,7 @@
       direction: "to-player",
       type,
       generation,
-      ...(type === "cue"
+      ...(usesSegment
         ? { segment: { start: segment.start, end: segment.end } }
         : {}),
     };
@@ -107,7 +178,10 @@
       "invalid-video",
       "player-error",
     ];
-    if (!validGeneration(generation) || !["ready", "error"].includes(type)) {
+    if (
+      !validGeneration(generation) ||
+      !["ready", "state", "error"].includes(type)
+    ) {
       return null;
     }
     if (
@@ -119,6 +193,17 @@
     ) {
       return null;
     }
+    if (
+      type === "state" &&
+      (!detail ||
+        typeof detail !== "object" ||
+        Object.keys(detail).length !== 2 ||
+        !Object.values(PLAYER_STATES).includes(detail.state) ||
+        !Number.isFinite(detail.currentTime) ||
+        detail.currentTime < 0)
+    ) {
+      return null;
+    }
 
     return {
       source: SOURCE,
@@ -126,7 +211,11 @@
       direction: "from-player",
       type,
       generation,
-      ...(type === "error" ? { detail: { reason: detail.reason } } : {}),
+      ...(type === "error"
+        ? { detail: { reason: detail.reason } }
+        : type === "state"
+          ? { detail: { state: detail.state, currentTime: detail.currentTime } }
+          : {}),
     };
   }
 
@@ -145,13 +234,18 @@
   }
 
   return Object.freeze({
+    PLAYER_STATES,
     activeSegment,
+    adjacentSentence,
     bridgeCommand,
     bridgeEvent,
+    explicitPlayback,
     initialCue,
     parseBridgeCommand,
     parseBridgeEvent,
     readerLesson,
     sentenceResponse,
+    shortcutAction,
+    youtubeEmbedId,
   });
 });

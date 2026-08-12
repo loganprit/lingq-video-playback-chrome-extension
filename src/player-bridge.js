@@ -18,33 +18,22 @@
   }
 
   function playerFrame() {
-    const candidate = document.querySelector(".lspc-player iframe");
-    if (!candidate || candidate.closest(".sentence--video-player, .sent-video-player")) {
-      return null;
+    for (const candidate of document.querySelectorAll(".lspc-player iframe")) {
+      if (candidate.closest(".sentence--video-player, .sent-video-player")) continue;
+      const id = core.youtubeEmbedId(candidate.src, location.href, location.origin);
+      if (id) return { candidate, id };
     }
-
-    try {
-      const url = new URL(candidate.src, location.href);
-      const youtube = ["www.youtube.com", "youtube.com", "www.youtube-nocookie.com"];
-      const id = url.pathname.match(/^\/embed\/([A-Za-z0-9_-]+)$/)?.[1];
-      return youtube.includes(url.hostname) &&
-        id &&
-        url.searchParams.get("enablejsapi") === "1" &&
-        url.searchParams.get("origin") === location.origin
-        ? { candidate, id }
-        : null;
-    } catch {
-      return null;
-    }
+    return null;
   }
 
-  function cue() {
+  function setSegment(method) {
     if (!ready || !pendingSegment) return;
     try {
-      player.cueVideoById({
+      const segment = pendingSegment;
+      player[method]({
         videoId,
-        startSeconds: pendingSegment.start,
-        endSeconds: pendingSegment.end,
+        startSeconds: segment.start,
+        endSeconds: segment.end,
       });
       pendingSegment = null;
     } catch {
@@ -63,7 +52,7 @@
     }
     ready = true;
     emit("ready");
-    cue();
+    setSegment("cueVideoById");
   }
 
   function waitForPlayer(expectedGeneration, attempts = 400) {
@@ -91,12 +80,25 @@
     try {
       player = new YT.Player(frame, {
         events: {
-          onReady() {
+          onReady(event) {
+            player = event.target;
             markReady(expectedGeneration);
           },
           onError() {
             ready = false;
             emit("error", { reason: "player-error" });
+          },
+          onStateChange(event) {
+            if (event.target !== player || !ready) return;
+            try {
+              emit("state", {
+                state: event.data,
+                currentTime: event.target.getCurrentTime(),
+              });
+            } catch {
+              ready = false;
+              emit("error", { reason: "player-error" });
+            }
           },
         },
       });
@@ -138,9 +140,18 @@
 
     if (command.type === "bind") {
       bind(command);
-    } else if (command.generation === generation) {
-      pendingSegment = command.segment;
-      cue();
+    } else if (command.generation === generation && ready) {
+      try {
+        if (command.type === "play" || command.type === "pause") {
+          player[`${command.type}Video`]();
+        } else {
+          pendingSegment = command.segment;
+          setSegment(command.type === "load" ? "loadVideoById" : "cueVideoById");
+        }
+      } catch {
+        ready = false;
+        emit("error", { reason: "player-error" });
+      }
     }
   });
 })();

@@ -11,9 +11,14 @@
     frame: null,
     generation: 0,
     layout: null,
+    navigation: null,
     pendingCue: null,
+    playerState: core.PLAYER_STATES.UNSTARTED,
+    playerTime: 0,
     ready: false,
     revision: 0,
+    segment: null,
+    sentences: null,
     timer: null,
     warnings: new Set(),
   };
@@ -27,20 +32,7 @@
   function eligibleFrame(modal) {
     for (const frame of modal?.querySelectorAll("iframe") || []) {
       if (frame.closest(".sentence--video-player, .sent-video-player")) continue;
-      try {
-        const url = new URL(frame.src, location.href);
-        const youtube = ["www.youtube.com", "youtube.com", "www.youtube-nocookie.com"];
-        if (
-          youtube.includes(url.hostname) &&
-          /^\/embed\/[^/]+$/.test(url.pathname) &&
-          url.searchParams.get("enablejsapi") === "1" &&
-          url.searchParams.get("origin") === location.origin
-        ) {
-          return frame;
-        }
-      } catch {
-        // An incomplete iframe URL is not eligible.
-      }
+      if (core.youtubeEmbedId(frame.src, location.href, location.origin)) return frame;
     }
     return null;
   }
@@ -84,7 +76,11 @@
     state.frame = null;
     state.ready = false;
     state.pendingCue = null;
+    state.playerState = core.PLAYER_STATES.UNSTARTED;
+    state.playerTime = 0;
+    state.segment = null;
     state.cueKey = null;
+    state.navigation = null;
   }
 
   function mount({ reader, portal, modal }) {
@@ -105,6 +101,7 @@
 
   async function sentencesFor(lesson) {
     if (state.cache?.key !== lesson.key) {
+      state.sentences = null;
       state.cache = {
         key: lesson.key,
         promise: fetch(lesson.endpoint, { credentials: "same-origin" })
@@ -122,14 +119,21 @@
     return state.cache.promise;
   }
 
-  function post(command) {
+  function postBridgeCommand(command) {
     if (command) window.postMessage(command, location.origin);
   }
 
   function cuePending() {
     if (!state.ready || !state.pendingCue || state.pendingCue.key === state.cueKey) return;
-    post(core.bridgeCommand("cue", state.generation, state.pendingCue.segment));
+    postBridgeCommand(
+      core.bridgeCommand(
+        state.pendingCue.play ? "load" : "cue",
+        state.generation,
+        state.pendingCue.segment,
+      ),
+    );
     state.cueKey = state.pendingCue.key;
+    state.pendingCue = null;
   }
 
   async function sync() {
@@ -142,6 +146,7 @@
 
     const sentences = await sentencesFor(context.lesson);
     if (revision !== state.revision) return;
+    state.sentences = sentences;
 
     const segment = core.initialCue(sentences, context.sentence.id, true);
     if (!segment) {
@@ -157,17 +162,85 @@
     }
 
     mount(player);
+    state.segment = { start: segment.start, end: segment.end };
     const key = `${context.lesson.key}:${segment.sentenceNumber}:${segment.start}:${segment.end}`;
-    state.pendingCue = { key, segment };
+    const play = state.navigation?.target === context.sentence.id;
+    if (state.navigation && context.sentence.id !== state.navigation.from) {
+      state.navigation = null;
+    }
+    state.pendingCue = { key, play, segment: state.segment };
 
     if (state.frame !== player.frame) {
       state.frame = player.frame;
       state.ready = false;
       state.cueKey = null;
       state.generation += 1;
-      post(core.bridgeCommand("bind", state.generation));
+      postBridgeCommand(core.bridgeCommand("bind", state.generation));
     }
     cuePending();
+  }
+
+  function navigationOwner(direction) {
+    const marker = state.layout?.reader.querySelector(
+      direction === "previous" ? ".nav--left > a.button" : ".next-page-button",
+    );
+    return marker?.closest("a, button, [role='button']") || marker;
+  }
+
+  function navigationDirection(target) {
+    const owner = target?.closest?.("a, button, [role='button']");
+    if (owner?.closest(".nav--left")) return "previous";
+    if (target?.closest?.(".next-page-button") || owner?.querySelector(".next-page-button")) {
+      return "next";
+    }
+    return null;
+  }
+
+  function armNavigation(direction) {
+    const context = readerContext();
+    const current = Number(context?.sentence.id.slice(1));
+    const target = core.adjacentSentence(current, state.sentences?.length, direction);
+    if (!state.layout || !target) return false;
+
+    state.navigation = { from: context.sentence.id, target: `s${target}` };
+    return true;
+  }
+
+  function navigate(direction) {
+    const owner = navigationOwner(direction);
+    if (owner && armNavigation(direction)) owner.click();
+  }
+
+  function replayNow() {
+    if (!state.ready || !state.segment) return;
+    postBridgeCommand(core.bridgeCommand("load", state.generation, state.segment));
+  }
+
+  function togglePlayback() {
+    if (!state.ready || !state.segment) return;
+    const command = core.explicitPlayback(
+      state.playerState,
+      state.playerTime,
+      state.segment,
+    );
+    if (command === "load") replayNow();
+    else postBridgeCommand(core.bridgeCommand(command, state.generation));
+  }
+
+  function targetKind(target) {
+    const editable = Boolean(
+      target?.isContentEditable || target?.closest?.("input, textarea, select, [contenteditable]"),
+    );
+    const interactive = Boolean(
+      target?.closest?.(
+        "a, button, input, select, textarea, summary, audio[controls], video[controls], " +
+          "[href], [tabindex], [role='button'], [role='link'], [role='checkbox'], " +
+          "[role='radio'], [role='switch'], [role='slider'], [role='spinbutton'], " +
+          "[role='textbox'], [role='combobox'], [role='listbox'], [role='menuitem'], " +
+          "[role='option'], [role='tab']",
+      ),
+    );
+    return { editable, interactive };
   }
 
   function scheduleSync() {
@@ -186,9 +259,40 @@
       return;
     }
 
+    if (event.type === "state") {
+      state.playerState = event.detail.state;
+      state.playerTime = event.detail.currentTime;
+      return;
+    }
+
     state.blockedFrame = state.frame;
     warnOnce(`player bridge failed: ${event.detail.reason}`);
     restoreLayout();
+  });
+
+  document.addEventListener(
+    "click",
+    (event) => {
+      const direction = navigationDirection(event.target);
+      if (direction) armNavigation(direction);
+    },
+    true,
+  );
+
+  document.addEventListener("keydown", (event) => {
+    if (!state.layout || !state.ready) return;
+    const action = core.shortcutAction({
+      key: event.code === "Space" ? "Space" : event.key.toUpperCase(),
+      modified: event.altKey || event.ctrlKey || event.metaKey || event.shiftKey,
+      repeat: event.repeat,
+      ...targetKind(event.target),
+    });
+    if (!action) return;
+
+    event.preventDefault();
+    if (action === "toggle") togglePlayback();
+    else if (action === "next") navigate("next");
+    else replayNow();
   });
 
   new MutationObserver(scheduleSync).observe(document.documentElement, {
