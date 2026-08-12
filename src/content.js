@@ -4,14 +4,19 @@
   const core = globalThis.LingqPlaybackCore;
   if (!core || window !== window.top) return;
 
+  const STORAGE_KEY = "playbackMode";
+
   const state = {
     blockedFrame: null,
+    boundaryArmed: false,
     cache: null,
     cueKey: null,
     frame: null,
     generation: 0,
     layout: null,
     navigation: null,
+    mode: "pause",
+    modeControl: null,
     pendingCue: null,
     playerState: core.PLAYER_STATES.UNSTARTED,
     playerTime: 0,
@@ -81,6 +86,42 @@
     state.segment = null;
     state.cueKey = null;
     state.navigation = null;
+    state.boundaryArmed = false;
+    state.modeControl?.remove();
+    state.modeControl = null;
+  }
+
+  function renderMode() {
+    for (const button of state.modeControl?.querySelectorAll("button") || []) {
+      button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode));
+    }
+  }
+
+  function mountModeControl() {
+    const footer = state.layout?.reader.querySelector(".main-footer .lesson-bottom");
+    if (!footer) return;
+    if (state.modeControl?.parentNode === footer) return;
+
+    state.modeControl?.remove();
+    const control = document.createElement("div");
+    control.className = "lspc-modes";
+    control.setAttribute("role", "group");
+    control.setAttribute("aria-label", "Playback Mode");
+    for (const mode of ["pause", "continue", "repeat"]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.mode = mode;
+      button.textContent = mode[0].toUpperCase() + mode.slice(1);
+      button.addEventListener("click", () => {
+        state.mode = mode;
+        renderMode();
+        void chrome.storage.local.set({ [STORAGE_KEY]: mode });
+      });
+      control.append(button);
+    }
+    footer.append(control);
+    state.modeControl = control;
+    renderMode();
   }
 
   function mount({ reader, portal, modal }) {
@@ -97,6 +138,7 @@
     portal.classList.add("lspc-portal");
     reader.classList.add("lspc-reader");
     portal.append(modal);
+    mountModeControl();
   }
 
   async function sentencesFor(lesson) {
@@ -132,6 +174,7 @@
         state.pendingCue.segment,
       ),
     );
+    state.boundaryArmed = false;
     state.cueKey = state.pendingCue.key;
     state.pendingCue = null;
   }
@@ -213,7 +256,20 @@
 
   function replayNow() {
     if (!state.ready || !state.segment) return;
+    state.boundaryArmed = false;
     postBridgeCommand(core.bridgeCommand("load", state.generation, state.segment));
+  }
+
+  function handleSentenceBoundary() {
+    state.boundaryArmed = false;
+    const context = readerContext();
+    const current = Number(context?.sentence.id.slice(1));
+    const hasNext = Boolean(
+      core.adjacentSentence(current, state.sentences?.length, "next"),
+    );
+    const action = core.boundaryAction(state.mode, hasNext);
+    if (action === "next") navigate("next");
+    else if (action === "repeat") replayNow();
   }
 
   function togglePlayback() {
@@ -262,6 +318,16 @@
     if (event.type === "state") {
       state.playerState = event.detail.state;
       state.playerTime = event.detail.currentTime;
+      const boundary = core.boundaryEvent(
+        state.boundaryArmed,
+        event.detail.state,
+        event.detail.state === core.PLAYER_STATES.PLAYING &&
+          state.segment &&
+        event.detail.currentTime >= state.segment.start &&
+          event.detail.currentTime < state.segment.end,
+      );
+      state.boundaryArmed = boundary.armed;
+      if (boundary.reached) handleSentenceBoundary();
       return;
     }
 
@@ -300,5 +366,8 @@
     subtree: true,
   });
   window.addEventListener("popstate", scheduleSync);
-  void sync();
+  void chrome.storage.local.get(STORAGE_KEY).then((stored) => {
+    state.mode = core.playbackMode(stored[STORAGE_KEY]);
+    return sync();
+  });
 })();

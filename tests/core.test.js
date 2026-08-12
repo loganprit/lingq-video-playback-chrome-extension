@@ -86,6 +86,33 @@ test("chooses explicit bounded playback commands", () => {
   assert.equal(core.explicitPlayback(core.PLAYER_STATES.PAUSED, 0, segment), "load");
 });
 
+test("normalizes persisted Playback Modes to Pause", () => {
+  assert.equal(core.playbackMode("pause"), "pause");
+  assert.equal(core.playbackMode("continue"), "continue");
+  assert.equal(core.playbackMode("repeat"), "repeat");
+  assert.equal(core.playbackMode("autoplay"), "pause");
+  assert.equal(core.playbackMode(), "pause");
+});
+
+test("chooses each Sentence Boundary reaction without wrapping", () => {
+  assert.equal(core.boundaryAction("pause", true), "stay");
+  assert.equal(core.boundaryAction("continue", true), "next");
+  assert.equal(core.boundaryAction("continue", false), "stay");
+  assert.equal(core.boundaryAction("repeat", false), "repeat");
+});
+
+test("reacts once only after expected bounded playback", () => {
+  const armed = core.boundaryEvent(false, core.PLAYER_STATES.PLAYING, true);
+  const reached = core.boundaryEvent(armed.armed, core.PLAYER_STATES.ENDED);
+
+  assert.deepEqual(armed, { armed: true, reached: false });
+  assert.deepEqual(reached, { armed: false, reached: true });
+  assert.deepEqual(core.boundaryEvent(reached.armed, core.PLAYER_STATES.ENDED), {
+    armed: false,
+    reached: false,
+  });
+});
+
 test("resolves shortcuts only for an unmodified page-owned key press", () => {
   assert.equal(core.shortcutAction({ key: "Space" }), "toggle");
   assert.equal(core.shortcutAction({ key: "N" }), "next");

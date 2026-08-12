@@ -3,6 +3,7 @@
   "name": "LingQ Sentence Playback Companion",
   "version": "0.1.0",
   "description": "Adds bounded visible YouTube playback to LingQ Sentence View.",
+  "permissions": ["storage"],
   "content_scripts": [
     {
       "matches": ["https://www.lingq.com/*"],

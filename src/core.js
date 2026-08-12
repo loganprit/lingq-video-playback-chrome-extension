@@ -106,6 +106,23 @@
     return "play";
   }
 
+  function playbackMode(value) {
+    return ["pause", "continue", "repeat"].includes(value) ? value : "pause";
+  }
+
+  function boundaryAction(mode, hasNext) {
+    if (playbackMode(mode) === "repeat") return "repeat";
+    return mode === "continue" && hasNext ? "next" : "stay";
+  }
+
+  function boundaryEvent(armed, playerState, expectedPlayback = false) {
+    if (expectedPlayback) return { armed: true, reached: false };
+    if (armed && playerState === PLAYER_STATES.ENDED) {
+      return { armed: false, reached: true };
+    }
+    return { armed, reached: false };
+  }
+
   function shortcutAction(value) {
     if (
       !value ||
@@ -239,10 +256,13 @@
     adjacentSentence,
     bridgeCommand,
     bridgeEvent,
+    boundaryAction,
+    boundaryEvent,
     explicitPlayback,
     initialCue,
     parseBridgeCommand,
     parseBridgeEvent,
+    playbackMode,
     readerLesson,
     sentenceResponse,
     shortcutAction,

@@ -84,7 +84,8 @@
             player = event.target;
             markReady(expectedGeneration);
           },
-          onError() {
+          onError(event) {
+            if (event.target !== player) return;
             ready = false;
             emit("error", { reason: "player-error" });
           },
