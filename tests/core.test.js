@@ -3,133 +3,76 @@ const assert = require("node:assert/strict");
 
 const core = require("../src/core.js");
 
-const { MODES, PLAYER_STATES } = core;
-
-test("normalizes persisted modes and defaults invalid values to pause", () => {
-  assert.equal(core.normalizeMode(MODES.PAUSE), MODES.PAUSE);
-  assert.equal(core.normalizeMode(MODES.CONTINUE), MODES.CONTINUE);
-  assert.equal(core.normalizeMode(MODES.REPEAT), MODES.REPEAT);
-  assert.equal(core.normalizeMode("unexpected"), MODES.PAUSE);
-  assert.equal(core.normalizeMode(undefined), MODES.PAUSE);
-});
-
-test("maps each mode to its sentence-ended reaction", () => {
-  assert.equal(core.reactionForEnded(MODES.PAUSE), "pause");
-  assert.equal(core.reactionForEnded(MODES.CONTINUE), "advance-and-play");
-  assert.equal(core.reactionForEnded(MODES.REPEAT), "replay");
-});
-
-test("only reacts to a deduplicated ended transition after playback armed", () => {
-  assert.equal(
-    core.shouldReactToEnded(PLAYER_STATES.PLAYING, PLAYER_STATES.ENDED, true),
-    true,
-  );
-  assert.equal(
-    core.shouldReactToEnded(PLAYER_STATES.ENDED, PLAYER_STATES.ENDED, true),
-    false,
-  );
-  assert.equal(
-    core.shouldReactToEnded(PLAYER_STATES.PLAYING, PLAYER_STATES.PAUSED, true),
-    false,
-  );
-  assert.equal(
-    core.shouldReactToEnded(PLAYER_STATES.UNSTARTED, PLAYER_STATES.ENDED, false),
-    false,
-  );
-});
-
-test("parses YouTube state events from strings and objects", () => {
-  assert.deepEqual(
-    core.parseYouTubeMessage(
-      JSON.stringify({ event: "onStateChange", info: 1, id: 7 }),
-    ),
-    { kind: "state", state: 1, id: 7 },
-  );
-  assert.deepEqual(
-    core.parseYouTubeMessage({
-      event: "infoDelivery",
-      info: { playerState: 0, currentTime: 2.75, duration: 100 },
-      id: 9,
-    }),
-    {
-      kind: "info",
-      state: 0,
-      currentTime: 2.75,
-      duration: 100,
-      id: 9,
-    },
-  );
-});
-
-test("ignores malformed and irrelevant YouTube messages", () => {
-  assert.equal(core.parseYouTubeMessage("not json"), null);
-  assert.equal(core.parseYouTubeMessage(null), null);
-  assert.equal(core.parseYouTubeMessage({ event: "onReady", info: null }), null);
-  assert.equal(
-    core.parseYouTubeMessage({ event: "infoDelivery", info: { volume: 50 } }),
-    null,
-  );
-});
-
-test("accepts only YouTube iframe origins", () => {
-  assert.equal(core.isYouTubeOrigin("https://www.youtube.com"), true);
-  assert.equal(core.isYouTubeOrigin("https://music.youtube.com"), true);
-  assert.equal(core.isYouTubeOrigin("https://www.youtube-nocookie.com"), true);
-  assert.equal(core.isYouTubeOrigin("https://youtube.com.evil.example"), false);
-  assert.equal(core.isYouTubeOrigin("https://example.com"), false);
-  assert.equal(core.isYouTubeOrigin("not a url"), false);
-});
-
-test("resolves supported shortcuts without stealing modified or editable input", () => {
-  const event = (key, overrides = {}) => ({
-    key,
-    target: { tagName: "DIV", isContentEditable: false },
-    ...overrides,
+test("identifies the current LingQ lesson from its reader URL", () => {
+  assert.deepEqual(core.readerLesson("/en/learn/es/web/reader/39351008"), {
+    key: "es:39351008",
+    endpoint: "/api/v3/es/lessons/39351008/sentences/",
   });
+  assert.equal(core.readerLesson("/en/learn/es/web/library"), null);
+});
 
-  assert.equal(core.shortcutAction(event(" ")), "toggle-play");
-  assert.equal(core.shortcutAction(event("N")), "next");
-  assert.equal(core.shortcutAction(event("r")), "replay");
-  assert.equal(core.shortcutAction(event("C")), "toggle-continue");
-  assert.equal(core.shortcutAction(event("a")), "continue");
-  assert.equal(core.shortcutAction(event("n", { metaKey: true })), null);
-  assert.equal(core.shortcutAction(event("n", { repeat: true })), null);
+test("resolves only a valid bounded segment for the active Sentence", () => {
+  const sentences = [
+    { timestamp: [0, 0.45] },
+    { timestamp: [0.55, 2.37] },
+  ];
+
+  assert.deepEqual(core.activeSegment(sentences, "s2"), {
+    sentenceNumber: 2,
+    start: 0.55,
+    end: 2.37,
+  });
+  assert.equal(core.activeSegment(sentences, "sentence-2"), null);
+  assert.equal(core.activeSegment([{ timestamp: [2, 1] }], "s1"), null);
+  assert.equal(core.activeSegment([{ timestamp: [0, "1"] }], "s1"), null);
+  assert.equal(core.activeSegment(sentences, "s3"), null);
+});
+
+test("accepts only a LingQ sentence response array", () => {
+  const sentences = [{ timestamp: [0, 0.45] }];
+
+  assert.equal(core.sentenceResponse(sentences), sentences);
+  assert.equal(core.sentenceResponse({ results: sentences }), null);
+  assert.equal(core.sentenceResponse(null), null);
+});
+
+test("cues initially only when both player and active bounds are valid", () => {
+  const sentences = [{ timestamp: [0.55, 2.37] }];
+
+  assert.deepEqual(core.initialCue(sentences, "s1", true), {
+    sentenceNumber: 1,
+    start: 0.55,
+    end: 2.37,
+  });
+  assert.equal(core.initialCue(sentences, "s1", false), null);
+  assert.equal(core.initialCue([{ timestamp: [2, 1] }], "s1", true), null);
+});
+
+test("accepts only fixed validated player commands", () => {
+  const bind = core.bridgeCommand("bind", 3);
+  const cue = core.bridgeCommand("cue", 3, { start: 0.55, end: 2.37 });
+
+  assert.deepEqual(core.parseBridgeCommand(bind), bind);
+  assert.deepEqual(core.parseBridgeCommand(cue), cue);
+  assert.equal(core.bridgeCommand("seekTo", 3, { start: 0.55, end: 2.37 }), null);
+  assert.equal(core.bridgeCommand("bind", 0), null);
+  assert.equal(core.bridgeCommand("cue", 3, { start: 2.37, end: 0.55 }), null);
   assert.equal(
-    core.shortcutAction(event("n", { target: { tagName: "INPUT" } })),
-    null,
-  );
-  assert.equal(
-    core.shortcutAction(
-      event(" ", { target: { tagName: "SPAN", isContentEditable: true } }),
-    ),
+    core.parseBridgeCommand({ ...bind, source: "untrusted-page-script" }),
     null,
   );
 });
 
-test("toggles between pause and continue without entering repeat", () => {
-  assert.equal(core.toggleContinueMode(MODES.PAUSE), MODES.CONTINUE);
-  assert.equal(core.toggleContinueMode(MODES.CONTINUE), MODES.PAUSE);
-  assert.equal(core.toggleContinueMode(MODES.REPEAT), MODES.CONTINUE);
-});
+test("accepts only current-generation player events", () => {
+  const ready = core.bridgeEvent("ready", 4);
+  const error = core.bridgeEvent("error", 4, { reason: "player-unavailable" });
 
-test("extracts a stable sentence key with sensible fallbacks", () => {
-  const rootWithId = {
-    querySelector(selector) {
-      if (selector === ".sentence") return { id: "s17", textContent: "Hola" };
-      if (selector === ".sentence-text") return { className: "sentence-text is-page-17" };
-      return null;
-    },
-  };
-  assert.equal(core.sentenceKey(rootWithId), "s17");
-
-  const rootWithPage = {
-    querySelector(selector) {
-      if (selector === ".sentence") return { id: "", textContent: "  Buenos   días " };
-      if (selector === ".sentence-text") return { className: "sentence-text is-page-3" };
-      return null;
-    },
-  };
-  assert.equal(core.sentenceKey(rootWithPage), "is-page-3");
-
-  assert.equal(core.sentenceKey({ querySelector: () => null }), null);
+  assert.deepEqual(core.parseBridgeEvent(ready, 4), ready);
+  assert.deepEqual(core.parseBridgeEvent(error, 4), error);
+  assert.equal(core.parseBridgeEvent(ready, 5), null);
+  assert.equal(core.bridgeEvent("playing", 4), null);
+  assert.equal(
+    core.parseBridgeEvent({ ...ready, direction: "to-player" }, 4),
+    null,
+  );
 });

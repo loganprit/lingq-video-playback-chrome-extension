@@ -9,183 +9,149 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function createCore() {
   "use strict";
 
-  const MODES = Object.freeze({
-    PAUSE: "pause",
-    CONTINUE: "continue",
-    REPEAT: "repeat",
-  });
+  const SOURCE = "lingq-sentence-playback-companion";
+  const VERSION = 1;
 
-  const PLAYER_STATES = Object.freeze({
-    UNSTARTED: -1,
-    ENDED: 0,
-    PLAYING: 1,
-    PAUSED: 2,
-    BUFFERING: 3,
-    CUED: 5,
-  });
-
-  const SHORTCUTS = Object.freeze({
-    " ": "toggle-play",
-    Spacebar: "toggle-play",
-    n: "next",
-    r: "replay",
-    c: "toggle-continue",
-    a: "continue",
-  });
-
-  function normalizeMode(value) {
-    return Object.values(MODES).includes(value) ? value : MODES.PAUSE;
-  }
-
-  function toggleContinueMode(mode) {
-    return normalizeMode(mode) === MODES.CONTINUE
-      ? MODES.PAUSE
-      : MODES.CONTINUE;
-  }
-
-  function reactionForEnded(mode) {
-    switch (normalizeMode(mode)) {
-      case MODES.CONTINUE:
-        return "advance-and-play";
-      case MODES.REPEAT:
-        return "replay";
-      default:
-        return "pause";
-    }
-  }
-
-  function shouldReactToEnded(previousState, nextState, sawPlaying) {
-    return (
-      sawPlaying === true &&
-      nextState === PLAYER_STATES.ENDED &&
-      previousState !== PLAYER_STATES.ENDED
+  function readerLesson(pathname) {
+    const match = String(pathname || "").match(
+      /^\/[^/]+\/learn\/([^/]+)\/web\/reader\/(\d+)(?:\/|$)/,
     );
-  }
+    if (!match) return null;
 
-  function parseYouTubeMessage(data) {
-    let payload = data;
-
-    if (typeof payload === "string") {
-      try {
-        payload = JSON.parse(payload);
-      } catch {
-        return null;
-      }
-    }
-
-    if (!payload || typeof payload !== "object") {
-      return null;
-    }
-
-    if (payload.event === "onStateChange" && Number.isFinite(payload.info)) {
-      return {
-        kind: "state",
-        state: payload.info,
-        id: payload.id,
-      };
-    }
-
-    if (payload.event !== "infoDelivery" || !payload.info) {
-      return null;
-    }
-
-    const state = Number.isFinite(payload.info.playerState)
-      ? payload.info.playerState
-      : undefined;
-    const currentTime = Number.isFinite(payload.info.currentTime)
-      ? payload.info.currentTime
-      : undefined;
-
-    if (state === undefined && currentTime === undefined) {
-      return null;
-    }
-
+    const [, language, lessonId] = match;
     return {
-      kind: "info",
-      state,
-      currentTime,
-      duration: Number.isFinite(payload.info.duration)
-        ? payload.info.duration
-        : undefined,
-      id: payload.id,
+      key: `${language}:${lessonId}`,
+      endpoint: `/api/v3/${encodeURIComponent(language)}/lessons/${lessonId}/sentences/`,
     };
   }
 
-  function isYouTubeOrigin(origin) {
-    try {
-      const hostname = new URL(origin).hostname;
-      return (
-        hostname === "youtube.com" ||
-        hostname.endsWith(".youtube.com") ||
-        hostname === "youtube-nocookie.com" ||
-        hostname.endsWith(".youtube-nocookie.com")
-      );
-    } catch {
-      return false;
-    }
-  }
+  function activeSegment(sentences, sentenceId) {
+    const match = String(sentenceId || "").match(/^s([1-9]\d*)$/);
+    if (!Array.isArray(sentences) || !match) return null;
 
-  function isEditableTarget(target) {
-    if (!target || typeof target !== "object") {
-      return false;
-    }
-
-    const tagName = String(target.tagName || "").toLowerCase();
-    return (
-      target.isContentEditable === true ||
-      ["input", "textarea", "select", "button"].includes(tagName) ||
-      (typeof target.closest === "function" &&
-        Boolean(target.closest('[contenteditable="true"], input, textarea, select, button')))
-    );
-  }
-
-  function shortcutAction(event) {
+    const sentenceNumber = Number(match[1]);
+    const timestamp = sentences[sentenceNumber - 1]?.timestamp;
     if (
-      !event ||
-      event.defaultPrevented ||
-      event.repeat ||
-      event.altKey ||
-      event.ctrlKey ||
-      event.metaKey ||
-      isEditableTarget(event.target)
+      !Array.isArray(timestamp) ||
+      timestamp.length !== 2 ||
+      !Number.isFinite(timestamp[0]) ||
+      !Number.isFinite(timestamp[1]) ||
+      timestamp[0] < 0 ||
+      timestamp[1] <= timestamp[0]
     ) {
       return null;
     }
 
-    const key = event.key === " " ? " " : String(event.key || "").toLowerCase();
-    return SHORTCUTS[key] || null;
+    return { sentenceNumber, start: timestamp[0], end: timestamp[1] };
   }
 
-  function sentenceKey(root) {
-    if (!root || typeof root.querySelector !== "function") {
+  function sentenceResponse(value) {
+    return Array.isArray(value) ? value : null;
+  }
+
+  function initialCue(sentences, sentenceId, playerAvailable) {
+    return playerAvailable ? activeSegment(sentences, sentenceId) : null;
+  }
+
+  function validGeneration(value) {
+    return Number.isSafeInteger(value) && value > 0;
+  }
+
+  function validSegment(value) {
+    return (
+      value &&
+      typeof value === "object" &&
+      Object.keys(value).length === 2 &&
+      Number.isFinite(value.start) &&
+      Number.isFinite(value.end) &&
+      value.start >= 0 &&
+      value.end > value.start
+    );
+  }
+
+  function bridgeCommand(type, generation, segment) {
+    if (!validGeneration(generation) || !["bind", "cue"].includes(type)) {
+      return null;
+    }
+    if (type === "cue" && !validSegment(segment)) return null;
+
+    return {
+      source: SOURCE,
+      version: VERSION,
+      direction: "to-player",
+      type,
+      generation,
+      ...(type === "cue"
+        ? { segment: { start: segment.start, end: segment.end } }
+        : {}),
+    };
+  }
+
+  function parseBridgeCommand(value) {
+    if (!value || typeof value !== "object") return null;
+
+    const command = bridgeCommand(value.type, value.generation, value.segment);
+    return command &&
+      value.source === SOURCE &&
+      value.version === VERSION &&
+      value.direction === "to-player" &&
+      Object.keys(value).length === Object.keys(command).length
+      ? command
+      : null;
+  }
+
+  function bridgeEvent(type, generation, detail) {
+    const reasons = [
+      "player-unavailable",
+      "youtube-api-timeout",
+      "invalid-video",
+      "player-error",
+    ];
+    if (!validGeneration(generation) || !["ready", "error"].includes(type)) {
+      return null;
+    }
+    if (
+      type === "error" &&
+      (!detail ||
+        typeof detail !== "object" ||
+        Object.keys(detail).length !== 1 ||
+        !reasons.includes(detail.reason))
+    ) {
       return null;
     }
 
-    const sentence = root.querySelector(".sentence");
-    const article = root.querySelector(".sentence-text");
-    if (!sentence && !article) {
-      return null;
-    }
+    return {
+      source: SOURCE,
+      version: VERSION,
+      direction: "from-player",
+      type,
+      generation,
+      ...(type === "error" ? { detail: { reason: detail.reason } } : {}),
+    };
+  }
 
-    const pageClass = String(article?.className || "")
-      .split(/\s+/)
-      .find((name) => /^is-page-\d+$/.test(name));
-    const text = String(sentence?.textContent || "").trim().replace(/\s+/g, " ");
+  function parseBridgeEvent(value, expectedGeneration) {
+    if (!value || typeof value !== "object") return null;
 
-    return sentence?.id || pageClass || text || null;
+    const event = bridgeEvent(value.type, value.generation, value.detail);
+    return event &&
+      value.source === SOURCE &&
+      value.version === VERSION &&
+      value.direction === "from-player" &&
+      value.generation === expectedGeneration &&
+      Object.keys(value).length === Object.keys(event).length
+      ? event
+      : null;
   }
 
   return Object.freeze({
-    MODES,
-    PLAYER_STATES,
-    isEditableTarget,
-    isYouTubeOrigin,
-    normalizeMode,
-    parseYouTubeMessage,
-    reactionForEnded,
-    sentenceKey,
-    shouldReactToEnded,
-    shortcutAction,
-    toggleContinueMode,
+    activeSegment,
+    bridgeCommand,
+    bridgeEvent,
+    initialCue,
+    parseBridgeCommand,
+    parseBridgeEvent,
+    readerLesson,
+    sentenceResponse,
   });
 });

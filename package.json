@@ -5,6 +5,6 @@
   "description": "Private Chrome extension for Migaku-style sentence playback controls in LingQ.",
   "scripts": {
     "test": "node --test",
-    "check": "node --check src/core.js && node --check src/content.js && node -e \"JSON.parse(require('node:fs').readFileSync('manifest.json', 'utf8'))\""
+    "check": "node --check src/core.js && node --check src/player-bridge.js && node --check src/content.js && node -e \"JSON.parse(require('node:fs').readFileSync('manifest.json', 'utf8'))\""
   }
 }
