@@ -7,7 +7,7 @@
 }
 
 .lspc-reader .sentence-text .loadedContent {
-  grid-template-rows: auto 0 auto minmax(0, 1fr) !important;
+  grid-template-rows: auto auto minmax(0, 1fr) !important;
 }
 
 .modal.video-player.lspc-player,
