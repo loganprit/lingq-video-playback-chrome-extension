@@ -204,3 +204,19 @@ test("accepts only current-generation player events", () => {
     null,
   );
 });
+
+test("chooses one lifecycle action for context changes", () => {
+  const frame = {};
+  const current = { lessonKey: "es:1", frame };
+
+  assert.equal(core.lifecycleAction(null, current), "bind");
+  assert.equal(core.lifecycleAction(current, current), "retain");
+  assert.equal(
+    core.lifecycleAction(current, { lessonKey: "es:2", frame }),
+    "bind",
+  );
+  assert.equal(
+    core.lifecycleAction(current, { lessonKey: "es:1", frame: {} }),
+    "bind",
+  );
+});

@@ -172,6 +172,14 @@
     return Number.isSafeInteger(value) && value > 0;
   }
 
+  function lifecycleAction(current, next) {
+    return !current ||
+      current.lessonKey !== next.lessonKey ||
+      current.frame !== next.frame
+      ? "bind"
+      : "retain";
+  }
+
   function validSegment(value) {
     return (
       value &&
@@ -291,6 +299,7 @@
     boundaryEvent,
     explicitPlayback,
     initialCue,
+    lifecycleAction,
     parseBridgeCommand,
     parseBridgeEvent,
     playbackMode,

@@ -1,9 +1,12 @@
 #sentence-video-player-portal.lspc-portal {
   display: block !important;
-  width: min(100%, max(20rem, calc((100dvh - 24rem) * 16 / 9)));
+  position: relative;
+  inset-inline-start: 50%;
+  width: calc(100cqi - 8rem);
   height: auto !important;
   aspect-ratio: 16 / 9;
   margin: 0 auto 24px;
+  translate: -50% 0;
 }
 
 .lspc-reader .sentence-text .loadedContent {
@@ -115,7 +118,9 @@
 
 @container (max-width: 44rem) {
   #sentence-video-player-portal.lspc-portal {
-    width: min(100%, max(20rem, calc((100dvh - 30rem) * 16 / 9)));
+    position: static;
+    width: 100%;
+    translate: none;
   }
 
   .lspc-reader .main-footer,

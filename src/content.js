@@ -15,6 +15,7 @@
     generation: 0,
     ignoreResetUntil: 0,
     layout: null,
+    lessonKey: null,
     navigation: null,
     mode: "pause",
     modeControl: null,
@@ -22,6 +23,7 @@
     playerState: core.PLAYER_STATES.UNSTARTED,
     playerTime: 0,
     ready: false,
+    recoveryAttemptedLessonKey: null,
     revision: 0,
     segment: null,
     sentences: null,
@@ -66,6 +68,10 @@
 
   function restoreLayout() {
     const layout = state.layout;
+    if (state.frame) {
+      postBridgeCommand(core.bridgeCommand("pause", state.generation));
+      state.generation += 1;
+    }
     if (layout) {
       layout.modal.classList.remove("lspc-player");
       layout.portal.classList.remove("lspc-portal");
@@ -80,6 +86,7 @@
     }
 
     state.layout = null;
+    state.lessonKey = null;
     state.frame = null;
     state.ready = false;
     state.pendingCue = null;
@@ -209,7 +216,12 @@
       return;
     }
 
+    const lifecycle = core.lifecycleAction(
+      state.frame ? { lessonKey: state.lessonKey, frame: state.frame } : null,
+      { lessonKey: context.lesson.key, frame: player.frame },
+    );
     mount(player);
+    state.lessonKey = context.lesson.key;
     state.segment = { start: segment.start, end: segment.end };
     const key = `${context.lesson.key}:${segment.sentenceNumber}:${segment.start}:${segment.end}`;
     const play =
@@ -219,7 +231,7 @@
     }
     state.pendingCue = { key, play, segment: state.segment };
 
-    if (state.frame !== player.frame) {
+    if (lifecycle === "bind") {
       state.frame = player.frame;
       state.ready = false;
       state.cueKey = null;
@@ -354,6 +366,7 @@
 
     if (event.type === "ready") {
       state.ready = true;
+      state.recoveryAttemptedLessonKey = null;
       cuePending();
       return;
     }
@@ -415,8 +428,23 @@
       return;
     }
 
-    state.blockedFrame = state.frame;
     warnOnce(`player bridge failed: ${event.detail.reason}`);
+    if (
+      event.detail.reason === "player-unavailable" &&
+      state.layout &&
+      state.recoveryAttemptedLessonKey !== state.lessonKey
+    ) {
+      const close = state.layout.modal.querySelector(".modal-close");
+      state.recoveryAttemptedLessonKey = state.lessonKey;
+      restoreLayout();
+      close?.click();
+      setTimeout(
+        () => document.querySelector(".svg-icon--videoYT-s")?.closest("button")?.click(),
+        500,
+      );
+      return;
+    }
+    state.blockedFrame = state.frame;
     restoreLayout();
   });
 
