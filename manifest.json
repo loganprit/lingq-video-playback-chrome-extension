@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "LingQ Sentence Playback Companion",
+  "version": "0.1.0",
+  "description": "Adds pause, continue, and repeat modes to YouTube lessons in LingQ Sentence View.",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.lingq.com/*"],
+      "js": ["src/core.js", "src/content.js"],
+      "css": ["src/styles.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
