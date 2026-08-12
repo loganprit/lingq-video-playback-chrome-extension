@@ -78,7 +78,7 @@
     }
 
     try {
-      player = new YT.Player(frame, {
+      player = new YT.Player(frame.id, {
         events: {
           onReady(event) {
             player = event.target;
@@ -105,7 +105,11 @@
       });
       waitForPlayer(expectedGeneration);
     } catch {
-      emit("error", { reason: "player-unavailable" });
+      if (attempts > 0) {
+        setTimeout(() => attach(expectedGeneration, attempts - 1), 50);
+      } else {
+        emit("error", { reason: "player-unavailable" });
+      }
     }
   }
 

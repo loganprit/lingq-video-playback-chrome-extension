@@ -36,6 +36,46 @@ test("accepts only a LingQ sentence response array", () => {
   assert.equal(core.sentenceResponse(null), null);
 });
 
+test("maps a released timestamp to one deterministic Sentence", () => {
+  const sentences = [
+    { timestamp: [1, 2] },
+    { timestamp: [2, 3] },
+    { timestamp: [4, 5] },
+  ];
+
+  for (const [time, sentenceNumber] of [
+    [0, 1],
+    [1, 1],
+    [1.99, 1],
+    [2, 2],
+    [3, 3],
+    [5, 3],
+    [6, 3],
+  ]) {
+    assert.equal(core.sentenceAtTime(sentences, time), sentenceNumber);
+  }
+
+  assert.equal(core.sentenceAtTime(sentences, Number.NaN), null);
+  assert.equal(core.sentenceAtTime([{ timestamp: [-1, 1] }], 0), null);
+  assert.equal(core.sentenceAtTime([{ timestamp: [2, 1] }], 1), null);
+  assert.equal(
+    core.sentenceAtTime([{ timestamp: [2, 3] }, { timestamp: [1, 2] }], 1),
+    null,
+  );
+});
+
+test("synchronizes only a settled seek to a different Sentence", () => {
+  const sentences = [
+    { timestamp: [1, 2] },
+    { timestamp: [2, 3] },
+  ];
+
+  assert.equal(core.seekTarget(sentences, 1, 2.5, true, false), 2);
+  assert.equal(core.seekTarget(sentences, 1, 2.5, false, false), null);
+  assert.equal(core.seekTarget(sentences, 1, 1.5, true, false), null);
+  assert.equal(core.seekTarget(sentences, 1, 2.5, true, true), null);
+});
+
 test("cues initially only when both player and active bounds are valid", () => {
   const sentences = [{ timestamp: [0.55, 2.37] }];
 

@@ -57,6 +57,37 @@
     return Array.isArray(value) ? value : null;
   }
 
+  function sentenceAtTime(sentences, time) {
+    if (!Array.isArray(sentences) || !sentences.length || !Number.isFinite(time)) {
+      return null;
+    }
+
+    let previousEnd = 0;
+    for (let index = 0; index < sentences.length; index += 1) {
+      const timestamp = sentences[index]?.timestamp;
+      if (
+        !Array.isArray(timestamp) ||
+        timestamp.length !== 2 ||
+        !Number.isFinite(timestamp[0]) ||
+        !Number.isFinite(timestamp[1]) ||
+        timestamp[0] < 0 ||
+        timestamp[0] < previousEnd ||
+        timestamp[1] <= timestamp[0]
+      ) {
+        return null;
+      }
+      previousEnd = timestamp[1];
+    }
+    const index = sentences.findIndex(({ timestamp }) => time < timestamp[1]);
+    return index < 0 ? sentences.length : index + 1;
+  }
+
+  function seekTarget(sentences, currentSentence, time, settled, synchronizing) {
+    if (!settled || synchronizing || !Number.isSafeInteger(currentSentence)) return null;
+    const target = sentenceAtTime(sentences, time);
+    return target && target !== currentSentence ? target : null;
+  }
+
   function youtubeEmbedId(value, baseUrl, origin) {
     try {
       const url = new URL(value, baseUrl);
@@ -264,6 +295,8 @@
     parseBridgeEvent,
     playbackMode,
     readerLesson,
+    seekTarget,
+    sentenceAtTime,
     sentenceResponse,
     shortcutAction,
     youtubeEmbedId,

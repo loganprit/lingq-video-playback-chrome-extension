@@ -13,6 +13,7 @@
     cueKey: null,
     frame: null,
     generation: 0,
+    ignoreResetUntil: 0,
     layout: null,
     navigation: null,
     mode: "pause",
@@ -24,6 +25,7 @@
     revision: 0,
     segment: null,
     sentences: null,
+    synchronizing: false,
     timer: null,
     warnings: new Set(),
   };
@@ -87,6 +89,8 @@
     state.cueKey = null;
     state.navigation = null;
     state.boundaryArmed = false;
+    state.ignoreResetUntil = 0;
+    state.synchronizing = false;
     state.modeControl?.remove();
     state.modeControl = null;
   }
@@ -174,6 +178,7 @@
         state.pendingCue.segment,
       ),
     );
+    state.ignoreResetUntil = Date.now() + 1000;
     state.boundaryArmed = false;
     state.cueKey = state.pendingCue.key;
     state.pendingCue = null;
@@ -207,7 +212,8 @@
     mount(player);
     state.segment = { start: segment.start, end: segment.end };
     const key = `${context.lesson.key}:${segment.sentenceNumber}:${segment.start}:${segment.end}`;
-    const play = state.navigation?.target === context.sentence.id;
+    const play =
+      state.navigation?.target === context.sentence.id && state.navigation.play;
     if (state.navigation && context.sentence.id !== state.navigation.from) {
       state.navigation = null;
     }
@@ -245,7 +251,7 @@
     const target = core.adjacentSentence(current, state.sentences?.length, direction);
     if (!state.layout || !target) return false;
 
-    state.navigation = { from: context.sentence.id, target: `s${target}` };
+    state.navigation = { from: context.sentence.id, target: `s${target}`, play: true };
     return true;
   }
 
@@ -254,14 +260,51 @@
     if (owner && armNavigation(direction)) owner.click();
   }
 
+  function navigateToSentence(sentenceNumber, play) {
+    const context = readerContext();
+    const progress = state.layout?.reader.querySelector(".rc-slider-with-marks");
+    const marks = progress?.querySelectorAll(".rc-slider-dot");
+    const mark = marks?.[sentenceNumber - 1];
+    if (!context || marks?.length !== state.sentences?.length || !mark) return;
+
+    const bounds = progress.getBoundingClientRect();
+    const percentage = Number.parseFloat(mark.style.left);
+    if (!Number.isFinite(percentage) || !bounds.width) return;
+
+    state.boundaryArmed = false;
+    state.synchronizing = true;
+    state.navigation = {
+      from: context.sentence.id,
+      target: `s${sentenceNumber}`,
+      play,
+    };
+    const options = {
+      bubbles: true,
+      buttons: 1,
+      clientX: bounds.left + bounds.width * (percentage / 100),
+      clientY: bounds.top + bounds.height / 2,
+    };
+    for (const type of [
+      "pointerdown",
+      "mousedown",
+      "pointerup",
+      "mouseup",
+      "click",
+    ]) {
+      progress.dispatchEvent(new MouseEvent(type, options));
+    }
+  }
+
   function replayNow() {
     if (!state.ready || !state.segment) return;
     state.boundaryArmed = false;
+    state.ignoreResetUntil = Date.now() + 1000;
     postBridgeCommand(core.bridgeCommand("load", state.generation, state.segment));
   }
 
   function handleSentenceBoundary() {
     state.boundaryArmed = false;
+    state.ignoreResetUntil = Date.now() + 1000;
     const context = readerContext();
     const current = Number(context?.sentence.id.slice(1));
     const hasNext = Boolean(
@@ -318,16 +361,57 @@
     if (event.type === "state") {
       state.playerState = event.detail.state;
       state.playerTime = event.detail.currentTime;
+      if (state.ignoreResetUntil) {
+        if (
+          Date.now() <= state.ignoreResetUntil &&
+          event.detail.state === core.PLAYER_STATES.PAUSED &&
+          event.detail.currentTime < 0.25
+        ) {
+          state.ignoreResetUntil = 0;
+          return;
+        }
+        if (Date.now() > state.ignoreResetUntil) state.ignoreResetUntil = 0;
+      }
+      if (
+        state.synchronizing &&
+        state.segment &&
+        [core.PLAYER_STATES.PLAYING, core.PLAYER_STATES.CUED].includes(
+          event.detail.state,
+        ) &&
+        event.detail.currentTime >= state.segment.start &&
+        event.detail.currentTime < state.segment.end
+      ) {
+        state.synchronizing = false;
+      }
+      if (state.synchronizing) state.boundaryArmed = false;
       const boundary = core.boundaryEvent(
         state.boundaryArmed,
         event.detail.state,
-        event.detail.state === core.PLAYER_STATES.PLAYING &&
+        !state.synchronizing &&
+          event.detail.state === core.PLAYER_STATES.PLAYING &&
           state.segment &&
-        event.detail.currentTime >= state.segment.start &&
+          event.detail.currentTime >= state.segment.start &&
           event.detail.currentTime < state.segment.end,
       );
       state.boundaryArmed = boundary.armed;
-      if (boundary.reached) handleSentenceBoundary();
+      if (boundary.reached) {
+        handleSentenceBoundary();
+        return;
+      }
+
+      const context = readerContext();
+      const target = core.seekTarget(
+        state.sentences,
+        Number(context?.sentence.id.slice(1)),
+        event.detail.currentTime,
+        [core.PLAYER_STATES.PLAYING, core.PLAYER_STATES.PAUSED].includes(
+          event.detail.state,
+        ),
+        state.synchronizing,
+      );
+      if (target) {
+        navigateToSentence(target, event.detail.state === core.PLAYER_STATES.PLAYING);
+      }
       return;
     }
 
@@ -341,6 +425,10 @@
     (event) => {
       const direction = navigationDirection(event.target);
       if (direction) armNavigation(direction);
+      if (state.layout && event.target?.closest?.(".sentence-text .sentence-item")) {
+        state.boundaryArmed = false;
+        postBridgeCommand(core.bridgeCommand("pause", state.generation));
+      }
     },
     true,
   );
