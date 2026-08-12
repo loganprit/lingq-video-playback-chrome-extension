@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "PROTOTYPE — LingQ control placement",
+  "version": "0.0.1",
+  "description": "Throwaway control-placement variants for LingQ Sentence View.",
+  "content_scripts": [
+    {
+      "matches": ["https://www.lingq.com/*"],
+      "js": ["prototype.js"],
+      "css": ["prototype.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

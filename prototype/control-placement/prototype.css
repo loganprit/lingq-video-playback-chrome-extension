@@ -1,0 +1,215 @@
+#lspc-placement-prototype,
+#lspc-placement-prototype * {
+  box-sizing: border-box;
+}
+
+#lspc-placement-prototype {
+  --lspc-ink: #12233b;
+  --lspc-muted: #617086;
+  --lspc-surface: #fff;
+  --lspc-soft: #eef2f6;
+  --lspc-active: #0c2847;
+  color: var(--lspc-ink);
+  font: 14px/1.3 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+#lspc-placement-prototype button {
+  min-width: 40px;
+  min-height: 40px;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+#lspc-placement-prototype button:focus-visible {
+  outline: 3px solid #f4b400;
+  outline-offset: 2px;
+}
+
+#lspc-placement-prototype .lspc-variant {
+  position: fixed;
+  z-index: 2147483000;
+}
+
+#lspc-placement-prototype .lspc-label {
+  color: var(--lspc-muted);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+#lspc-placement-prototype .lspc-modes {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--lspc-soft);
+}
+
+#lspc-placement-prototype .lspc-modes button {
+  padding: 0 12px;
+  border-radius: 9px;
+  background: transparent;
+  color: #3f4d61;
+  font-size: 12px;
+  font-weight: 700;
+  transition-property: background-color, color;
+  transition-duration: 120ms;
+}
+
+#lspc-placement-prototype .lspc-modes button:hover {
+  background: #dfe5ec;
+}
+
+#lspc-placement-prototype .lspc-modes button[aria-pressed="true"] {
+  background: var(--lspc-active);
+  color: #fff;
+}
+
+#lspc-placement-prototype .lspc-footer {
+  bottom: 7px;
+  left: 142px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 50px;
+  padding: 4px 6px 4px 12px;
+  border-radius: 15px;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 5px 18px rgb(18 35 59 / 14%);
+}
+
+#lspc-placement-prototype .lspc-sentence {
+  top: 250px;
+  left: 50%;
+  display: grid;
+  width: 410px;
+  translate: -50% 0;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--lspc-surface);
+  box-shadow: 0 12px 36px rgb(18 35 59 / 18%);
+}
+
+#lspc-placement-prototype .lspc-sentence > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+#lspc-placement-prototype .lspc-sentence span,
+#lspc-placement-prototype small {
+  color: var(--lspc-muted);
+  font-size: 11px;
+}
+
+#lspc-placement-prototype .lspc-modes-wide button {
+  flex: 1;
+}
+
+#lspc-placement-prototype kbd {
+  padding: 2px 5px;
+  border: 1px solid #cbd3dd;
+  border-radius: 5px;
+  background: #fff;
+  color: var(--lspc-ink);
+  font: 700 10px/1 ui-monospace, monospace;
+}
+
+#lspc-placement-prototype .lspc-popover {
+  bottom: 82px;
+  left: 18px;
+}
+
+#lspc-placement-prototype .lspc-popover-trigger {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  min-height: 46px;
+  padding: 0 14px;
+  border-radius: 23px;
+  background: var(--lspc-active);
+  box-shadow: 0 8px 24px rgb(18 35 59 / 24%);
+  color: #fff;
+}
+
+#lspc-placement-prototype .lspc-popover-trigger span:first-child {
+  color: #c9d6e5;
+  font-size: 11px;
+}
+
+#lspc-placement-prototype .lspc-popover-menu {
+  position: absolute;
+  bottom: 54px;
+  left: 0;
+  width: 172px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--lspc-surface);
+  box-shadow: 0 12px 36px rgb(18 35 59 / 22%);
+}
+
+#lspc-placement-prototype .lspc-modes-stack {
+  display: grid;
+  margin: 8px 0;
+}
+
+#lspc-placement-prototype .lspc-modes-stack button {
+  justify-content: start;
+  text-align: left;
+}
+
+#lspc-placement-prototype .lspc-switcher {
+  position: fixed;
+  right: 50%;
+  bottom: 76px;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  min-width: 310px;
+  padding: 5px;
+  border-radius: 999px;
+  translate: 50% 0;
+  background: #5b24d6;
+  box-shadow: 0 8px 30px rgb(31 17 73 / 30%);
+  color: #fff;
+}
+
+#lspc-placement-prototype .lspc-switcher button {
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font-size: 18px;
+}
+
+#lspc-placement-prototype .lspc-switcher button:hover {
+  background: rgb(255 255 255 / 16%);
+}
+
+#lspc-placement-prototype .lspc-switcher span {
+  display: grid;
+  flex: 1;
+  text-align: center;
+}
+
+#lspc-placement-prototype .lspc-switcher small {
+  color: #dfd5fb;
+}
+
+@media (max-width: 720px) {
+  #lspc-placement-prototype .lspc-footer {
+    right: 8px;
+    bottom: 72px;
+    left: 8px;
+    justify-content: center;
+  }
+
+  #lspc-placement-prototype .lspc-sentence {
+    right: 12px;
+    left: 12px;
+    width: auto;
+    translate: 0 0;
+  }
+}
