@@ -1,6 +1,6 @@
 #sentence-video-player-portal.lspc-portal {
   display: block !important;
-  width: 100%;
+  width: min(100%, max(20rem, calc((100dvh - 24rem) * 16 / 9)));
   height: auto !important;
   aspect-ratio: 16 / 9;
   margin: 0 auto 24px;
@@ -27,6 +27,8 @@
   box-shadow: none !important;
 }
 
+.modal.video-player.lspc-player .modal-background,
+.modal.video-player.lspc-player .modal-close,
 .modal.video-player.lspc-player .modal-section--head {
   display: none !important;
 }
@@ -67,6 +69,19 @@
   text-align: center;
 }
 
+.lspc-reader .sentence-text .sentence {
+  display: block;
+  max-width: 60rem;
+}
+
+.lspc-reader {
+  container-type: inline-size;
+}
+
+.lspc-reader .main-footer .lesson-bottom {
+  flex-wrap: wrap;
+}
+
 .lspc-modes {
   display: flex;
   gap: 4px;
@@ -77,7 +92,7 @@
 }
 
 .lspc-modes button {
-  min-height: 34px;
+  min-height: 40px;
   padding: 0 12px;
   border: 0;
   border-radius: 7px;
@@ -94,14 +109,39 @@
 }
 
 .lspc-modes button:focus-visible {
-  outline: 3px solid #f59e0b;
+  outline: 2px solid Highlight;
   outline-offset: 2px;
 }
 
-@media (max-width: 760px) {
+@container (max-width: 44rem) {
+  #sentence-video-player-portal.lspc-portal {
+    width: min(100%, max(20rem, calc((100dvh - 30rem) * 16 / 9)));
+  }
+
+  .lspc-reader .main-footer,
+  .lspc-reader .main-footer .lesson-bottom {
+    min-height: 6.625rem;
+  }
+
+  .lspc-reader .main-footer {
+    margin-block-start: -2.625rem;
+  }
+
   .lspc-modes {
     order: -1;
     flex: 1 0 100%;
     justify-content: center;
+  }
+}
+
+@media (max-height: 41.25rem) {
+  #sentence-video-player-portal.lspc-portal {
+    width: min(100%, max(8rem, calc((100dvh - 20rem) * 16 / 9)));
+  }
+}
+
+@media (max-width: 44rem) and (max-height: 41.25rem) {
+  #sentence-video-player-portal.lspc-portal {
+    width: min(100%, max(8rem, calc((100dvh - 30rem) * 16 / 9)));
   }
 }
