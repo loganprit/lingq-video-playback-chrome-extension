@@ -1,12 +1,9 @@
 #sentence-video-player-portal.lspc-portal {
   display: block !important;
-  position: relative;
-  inset-inline-start: 50%;
-  width: calc(100cqi - 8rem);
+  width: 100cqi;
   height: auto !important;
   aspect-ratio: 16 / 9;
-  margin: 0 auto 24px;
-  translate: -50% 0;
+  margin: 0 calc((100% - 100cqi) / 2) 24px;
 }
 
 .lspc-reader .sentence-text .loadedContent {
@@ -117,12 +114,6 @@
 }
 
 @container (max-width: 44rem) {
-  #sentence-video-player-portal.lspc-portal {
-    position: static;
-    width: 100%;
-    translate: none;
-  }
-
   .lspc-reader .main-footer,
   .lspc-reader .main-footer .lesson-bottom {
     min-height: 6.625rem;
@@ -142,6 +133,7 @@
 @media (max-height: 41.25rem) {
   #sentence-video-player-portal.lspc-portal {
     width: min(100%, max(8rem, calc((100dvh - 20rem) * 16 / 9)));
+    margin-inline: auto;
   }
 }
 
