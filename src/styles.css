@@ -1,9 +1,9 @@
 #sentence-video-player-portal.lspc-portal {
   display: block !important;
-  width: 100cqi;
+  width: min(100%, max(20rem, calc((100dvh - 24rem) * 16 / 9)));
   height: auto !important;
   aspect-ratio: 16 / 9;
-  margin: 0 calc((100% - 100cqi) / 2) 24px;
+  margin: 0 auto 24px;
 }
 
 .lspc-reader .sentence-text .loadedContent {
@@ -114,6 +114,10 @@
 }
 
 @container (max-width: 44rem) {
+  #sentence-video-player-portal.lspc-portal {
+    width: min(100%, max(20rem, calc((100dvh - 30rem) * 16 / 9)));
+  }
+
   .lspc-reader .main-footer,
   .lspc-reader .main-footer .lesson-bottom {
     min-height: 6.625rem;
