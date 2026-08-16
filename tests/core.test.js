@@ -220,3 +220,25 @@ test("chooses one lifecycle action for context changes", () => {
     "bind",
   );
 });
+
+test("rebinds layout owners when LingQ rerenders around the mounted player", () => {
+  const frame = {};
+  const modal = {};
+  const portal = {};
+  const reader = {};
+  const footer = {};
+  const current = { modal, portal, reader, footer };
+
+  assert.equal(core.layoutAction(current, current), "retain");
+  assert.equal(core.layoutAction(current, { ...current, reader: {} }), "rebind");
+  assert.equal(core.layoutAction(current, { ...current, footer: {} }), "rebind");
+  assert.equal(core.layoutAction(current, { ...current, portal: {} }), "rebind");
+  assert.equal(core.layoutAction(current, { ...current, modal: {} }), "replace");
+  assert.equal(
+    core.lifecycleAction(
+      { lessonKey: "es:1", frame, ...current },
+      { lessonKey: "es:1", frame, ...current, reader: {} },
+    ),
+    "bind",
+  );
+});

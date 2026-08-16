@@ -175,9 +175,19 @@
   function lifecycleAction(current, next) {
     return !current ||
       current.lessonKey !== next.lessonKey ||
-      current.frame !== next.frame
+      current.frame !== next.frame ||
+      layoutAction(current, next) === "rebind"
       ? "bind"
       : "retain";
+  }
+
+  function layoutAction(current, next) {
+    if (!current || current.modal !== next.modal) return "replace";
+    return current.portal === next.portal &&
+      current.reader === next.reader &&
+      current.footer === next.footer
+      ? "retain"
+      : "rebind";
   }
 
   function validSegment(value) {
@@ -299,6 +309,7 @@
     boundaryEvent,
     explicitPlayback,
     initialCue,
+    layoutAction,
     lifecycleAction,
     parseBridgeCommand,
     parseBridgeEvent,

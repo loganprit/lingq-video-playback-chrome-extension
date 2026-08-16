@@ -51,9 +51,10 @@
     const lesson = core.readerLesson(location.pathname);
     const sentence = reader?.querySelector(".sentence-text .sentence[id^='s']");
     const portal = reader?.querySelector("#sentence-video-player-portal");
+    const footer = reader?.querySelector(".main-footer .lesson-bottom");
 
-    return reader && lesson && sentence && portal
-      ? { reader, lesson, sentence, portal }
+    return reader && lesson && sentence && portal && footer
+      ? { reader, lesson, sentence, portal, footer }
       : null;
   }
 
@@ -109,7 +110,7 @@
   }
 
   function mountModeControl() {
-    const footer = state.layout?.reader.querySelector(".main-footer .lesson-bottom");
+    const footer = state.layout?.footer;
     if (!footer) return;
     if (state.modeControl?.parentNode === footer) return;
 
@@ -135,13 +136,37 @@
     renderMode();
   }
 
-  function mount({ reader, portal, modal }) {
-    if (state.layout?.modal === modal && modal.parentNode === portal) return;
+  function mount({ reader, portal, footer, modal }) {
+    const next = { modal, portal, reader, footer };
+    const action = core.layoutAction(state.layout, next);
+    if (
+      action === "retain" &&
+      modal.parentNode === portal &&
+      state.modeControl?.parentNode === footer
+    ) {
+      modal.classList.add("lspc-player");
+      portal.classList.add("lspc-portal");
+      reader.classList.add("lspc-reader");
+      return;
+    }
+    if (action === "rebind" || action === "retain") {
+      state.layout.portal.classList.remove("lspc-portal");
+      state.layout.reader.classList.remove("lspc-reader");
+      state.modeControl?.remove();
+      state.modeControl = null;
+      state.layout = { ...state.layout, ...next };
+      portal.classList.add("lspc-portal");
+      reader.classList.add("lspc-reader");
+      portal.append(modal);
+      mountModeControl();
+      return;
+    }
     restoreLayout();
     state.layout = {
       modal,
       portal,
       reader,
+      footer,
       parent: modal.parentNode,
       nextSibling: modal.nextSibling,
     };
@@ -217,8 +242,10 @@
     }
 
     const lifecycle = core.lifecycleAction(
-      state.frame ? { lessonKey: state.lessonKey, frame: state.frame } : null,
-      { lessonKey: context.lesson.key, frame: player.frame },
+      state.frame
+        ? { lessonKey: state.lessonKey, frame: state.frame, ...state.layout }
+        : null,
+      { lessonKey: context.lesson.key, ...player },
     );
     mount(player);
     state.lessonKey = context.lesson.key;
