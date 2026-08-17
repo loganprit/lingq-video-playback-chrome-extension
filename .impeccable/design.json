@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-16T00:00:00.000Z",
+  "title": "Design System: LingQ Sentence Playback Companion",
+  "extensions": {
+    "colorMeta": {
+      "playback-violet": {
+        "role": "primary",
+        "displayName": "Playback Violet",
+        "canonical": "#5c5ce0"
+      }
+    },
+    "typographyMeta": {
+      "label": {
+        "displayName": "Compact Label",
+        "purpose": "Playback context, status, and tooltip guidance."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "tooltip-reveal",
+        "value": "120ms ease",
+        "purpose": "Reveal shortcut guidance without delaying operation."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow-reader",
+        "value": "44rem"
+      },
+      {
+        "name": "short-window",
+        "value": "41.25rem"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Playback Mode",
+      "kind": "button",
+      "refersTo": "playback-mode",
+      "description": "A native-sized mode action with an explicit selected state.",
+      "html": "<button class=\"ds-playback-mode\" aria-pressed=\"true\">Pause</button>",
+      "css": ".ds-playback-mode { min-width: 44px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 7px; background: #5c5ce0; color: #fff; font: inherit; font-weight: 600; cursor: pointer; } .ds-playback-mode:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }"
+    },
+    {
+      "name": "Shortcut Help",
+      "kind": "button",
+      "description": "A circular keyboard-accessible help affordance.",
+      "html": "<button class=\"ds-shortcut-help\" aria-label=\"Keyboard shortcuts\">?</button>",
+      "css": ".ds-shortcut-help { width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; } .ds-shortcut-help:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Quiet Instrument Panel",
+    "overview": "A restrained and precise control layer that supports LingQ's live lesson without competing with it.",
+    "keyCharacteristics": [
+      "Video-first composition",
+      "Compact native controls",
+      "One selected-state accent",
+      "Responsive desktop reflow"
+    ],
+    "rules": [
+      {
+        "name": "The One Accent Rule",
+        "body": "Playback Violet communicates selected extension state only.",
+        "section": "colors"
+      },
+      {
+        "name": "The Flat-by-Default Rule",
+        "body": "Use tonal contrast instead of decorative depth.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Inherit LingQ typography, text color, and theme behavior.",
+      "Keep interactive targets at least 44px."
+    ],
+    "donts": [
+      "Do not restyle or obscure LingQ-owned UI.",
+      "Do not add decorative shadows, gradients, fonts, or accents."
+    ]
+  }
+}
