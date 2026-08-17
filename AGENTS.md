@@ -1,5 +1,9 @@
 # Repository instructions
 
+## Ticket completion
+
+When ticket implementation is complete, push its branch, merge it into `main` through a pull request, and verify `origin/main` contains the merged commit before reporting completion.
+
 ## Agent skills
 
 ### Issue tracker
