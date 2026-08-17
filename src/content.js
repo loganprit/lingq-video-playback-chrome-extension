@@ -249,7 +249,7 @@
     if (state.pendingCue.play) state.synchronizing = true;
     postBridgeCommand(
       core.bridgeCommand(
-        state.pendingCue.play ? "load" : "cue",
+        state.pendingCue.play ? "seek-play" : "seek",
         state.generation,
         state.pendingCue.segment,
       ),
@@ -387,7 +387,7 @@
     state.boundaryArmed = false;
     state.synchronizing = true;
     state.ignoreResetUntil = Date.now() + 1000;
-    postBridgeCommand(core.bridgeCommand("load", state.generation, state.segment));
+    postBridgeCommand(core.bridgeCommand("seek-play", state.generation, state.segment));
   }
 
   function handleSentenceBoundary() {

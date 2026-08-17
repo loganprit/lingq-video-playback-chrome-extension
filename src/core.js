@@ -215,11 +215,11 @@
   function bridgeCommand(type, generation, segment) {
     if (
       !validGeneration(generation) ||
-      !["bind", "cue", "load", "play", "pause"].includes(type)
+      !["bind", "seek", "seek-play", "play", "pause"].includes(type)
     ) {
       return null;
     }
-    const usesSegment = ["cue", "load"].includes(type);
+    const usesSegment = ["seek", "seek-play"].includes(type);
     if (usesSegment !== Boolean(validSegment(segment))) return null;
 
     return {
