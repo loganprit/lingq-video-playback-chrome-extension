@@ -27,6 +27,8 @@
     revision: 0,
     segment: null,
     sentences: null,
+    statusControl: null,
+    statusKind: null,
     synchronizing: false,
     timer: null,
     warnings: new Set(),
@@ -101,6 +103,27 @@
     state.synchronizing = false;
     state.modeControl?.remove();
     state.modeControl = null;
+    state.statusControl?.remove();
+    state.statusControl = null;
+    state.statusKind = null;
+  }
+
+  function setStatus(kind, footer = state.layout?.footer) {
+    const message = core.companionStatus(kind);
+    if (!footer || !message) return;
+    if (state.statusControl?.parentNode !== footer) {
+      state.statusControl?.remove();
+      state.statusControl = document.createElement("span");
+      state.statusControl.className = "lspc-status";
+      state.statusControl.setAttribute("role", "status");
+      state.statusControl.setAttribute("aria-live", "polite");
+      state.statusControl.setAttribute("aria-atomic", "true");
+      footer.append(state.statusControl);
+      state.statusKind = null;
+    }
+    if (state.statusKind === kind) return;
+    state.statusControl.textContent = message;
+    state.statusKind = kind;
   }
 
   function renderMode() {
@@ -158,6 +181,7 @@
       portal.classList.add("lspc-portal");
       reader.classList.add("lspc-reader");
       portal.append(modal);
+      if (state.statusKind) setStatus(state.statusKind, footer);
       mountModeControl();
       return;
     }
@@ -203,6 +227,7 @@
 
   function cuePending() {
     if (!state.ready || !state.pendingCue || state.pendingCue.key === state.cueKey) return;
+    if (state.pendingCue.play) state.synchronizing = true;
     postBridgeCommand(
       core.bridgeCommand(
         state.pendingCue.play ? "load" : "cue",
@@ -237,7 +262,10 @@
 
     const player = playerContext(context);
     if (!player) {
-      restoreLayout();
+      const invoked = document.querySelector(".video-player.is-active iframe");
+      if (state.layout) restoreLayout();
+      if (invoked) setStatus("unsupported", context.footer);
+      else if (state.statusControl) restoreLayout();
       return;
     }
 
@@ -263,6 +291,7 @@
       state.ready = false;
       state.cueKey = null;
       state.generation += 1;
+      setStatus("loading");
       postBridgeCommand(core.bridgeCommand("bind", state.generation));
     }
     cuePending();
@@ -337,6 +366,7 @@
   function replayNow() {
     if (!state.ready || !state.segment) return;
     state.boundaryArmed = false;
+    state.synchronizing = true;
     state.ignoreResetUntil = Date.now() + 1000;
     postBridgeCommand(core.bridgeCommand("load", state.generation, state.segment));
   }
@@ -394,6 +424,7 @@
     if (event.type === "ready") {
       state.ready = true;
       state.recoveryAttemptedLessonKey = null;
+      setStatus("ready");
       cuePending();
       return;
     }
@@ -401,6 +432,16 @@
     if (event.type === "state") {
       state.playerState = event.detail.state;
       state.playerTime = event.detail.currentTime;
+      if (
+        state.synchronizing &&
+        [core.PLAYER_STATES.PAUSED, core.PLAYER_STATES.CUED].includes(
+          event.detail.state,
+        )
+      ) {
+        setStatus("paused");
+      } else if (state.ready) {
+        setStatus("ready");
+      }
       if (state.ignoreResetUntil) {
         if (
           Date.now() <= state.ignoreResetUntil &&
@@ -415,9 +456,7 @@
       if (
         state.synchronizing &&
         state.segment &&
-        [core.PLAYER_STATES.PLAYING, core.PLAYER_STATES.CUED].includes(
-          event.detail.state,
-        ) &&
+        event.detail.state === core.PLAYER_STATES.PLAYING &&
         event.detail.currentTime >= state.segment.start &&
         event.detail.currentTime < state.segment.end
       ) {
@@ -456,6 +495,14 @@
     }
 
     warnOnce(`player bridge failed: ${event.detail.reason}`);
+    state.ready = false;
+    if (event.detail.reason === "invalid-video") {
+      const footer = state.layout?.footer;
+      restoreLayout();
+      setStatus("unsupported", footer);
+      return;
+    }
+    setStatus("failed");
     if (
       event.detail.reason === "player-unavailable" &&
       state.layout &&
@@ -471,8 +518,7 @@
       );
       return;
     }
-    state.blockedFrame = state.frame;
-    restoreLayout();
+    state.blockedFrame = null;
   });
 
   document.addEventListener(
