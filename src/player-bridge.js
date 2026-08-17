@@ -6,7 +6,6 @@
   globalThis.__lingqSentencePlayerBridge = true;
 
   let activeSegment = null;
-  let boundaryPending = null;
   let boundaryTimer = null;
   let frame = null;
   let generation = 0;
@@ -34,7 +33,6 @@
   }
 
   function failPlayer() {
-    boundaryPending = null;
     stopBoundaryWatcher();
     ready = false;
     emit("error", { reason: "player-error" });
@@ -56,8 +54,10 @@
       try {
         if (player.getCurrentTime() < activeSegment.end) return;
         stopBoundaryWatcher();
-        boundaryPending = activeSegment.end;
-        player.pauseVideo();
+        emit("state", {
+          state: core.PLAYER_STATES.ENDED,
+          currentTime: activeSegment.end,
+        });
       } catch {
         failPlayer();
       }
@@ -67,9 +67,18 @@
   function seekSegment(segment, play) {
     if (!ready) return;
     try {
+      const currentTime = player.getCurrentTime();
       activeSegment = segment;
-      boundaryPending = null;
       stopBoundaryWatcher();
+      if (core.segmentTransition(play, currentTime, segment) === "resume") {
+        player.playVideo();
+        watchBoundary(currentTime);
+        emit("state", {
+          state: core.PLAYER_STATES.PLAYING,
+          currentTime,
+        });
+        return;
+      }
       if (!play) player.pauseVideo();
       player.seekTo(segment.start, true);
       player[play ? "playVideo" : "pauseVideo"]();
@@ -126,18 +135,6 @@
           onStateChange(event) {
             if (event.target !== player || !ready) return;
             try {
-              if (
-                event.data === core.PLAYER_STATES.PAUSED &&
-                boundaryPending !== null
-              ) {
-                const currentTime = boundaryPending;
-                boundaryPending = null;
-                emit("state", {
-                  state: core.PLAYER_STATES.ENDED,
-                  currentTime,
-                });
-                return;
-              }
               const currentTime = event.target.getCurrentTime();
               if (event.data === core.PLAYER_STATES.PLAYING) {
                 watchBoundary(currentTime);
@@ -183,7 +180,6 @@
 
     stopBoundaryWatcher();
     activeSegment = null;
-    boundaryPending = null;
     frame = found;
     player = null;
     ready = false;

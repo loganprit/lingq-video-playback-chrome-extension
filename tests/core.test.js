@@ -126,6 +126,16 @@ test("chooses explicit bounded playback commands", () => {
   assert.equal(core.explicitPlayback(core.PLAYER_STATES.PAUSED, 0, segment), "load");
 });
 
+test("resumes a near-adjacent Sentence without seeking", () => {
+  const segment = { start: 248.91, end: 253.12 };
+
+  assert.equal(core.segmentTransition(true, 248.81, segment), "resume");
+  assert.equal(core.segmentTransition(true, 248.65, segment), "seek");
+  assert.equal(core.segmentTransition(true, 249.17, segment), "seek");
+  assert.equal(core.segmentTransition(false, 248.81, segment), "seek");
+  assert.equal(core.segmentTransition(true, segment.end, segment), "seek");
+});
+
 test("normalizes persisted Playback Modes to Pause", () => {
   assert.equal(core.playbackMode("pause"), "pause");
   assert.equal(core.playbackMode("continue"), "continue");

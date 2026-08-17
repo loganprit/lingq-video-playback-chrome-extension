@@ -401,6 +401,10 @@
     const action = core.boundaryAction(state.mode, hasNext);
     if (action === "next") navigate("next");
     else if (action === "repeat") replayNow();
+    else {
+      state.synchronizing = true;
+      postBridgeCommand(core.bridgeCommand("pause", state.generation));
+    }
   }
 
   function togglePlayback() {
@@ -476,7 +480,7 @@
         state.synchronizing &&
         state.segment &&
         event.detail.state === core.PLAYER_STATES.PLAYING &&
-        event.detail.currentTime >= state.segment.start &&
+        event.detail.currentTime >= state.segment.start - 0.25 &&
         event.detail.currentTime < state.segment.end
       ) {
         state.synchronizing = false;
@@ -488,7 +492,7 @@
         !state.synchronizing &&
           event.detail.state === core.PLAYER_STATES.PLAYING &&
           state.segment &&
-          event.detail.currentTime >= state.segment.start &&
+          event.detail.currentTime >= state.segment.start - 0.25 &&
           event.detail.currentTime < state.segment.end,
       );
       state.boundaryArmed = boundary.armed;
