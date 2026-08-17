@@ -137,6 +137,17 @@
     return "play";
   }
 
+  function segmentTransition(play, currentTime, segment) {
+    return play &&
+      validSegment(segment) &&
+      Number.isFinite(currentTime) &&
+      currentTime >= segment.start - 0.25 &&
+      currentTime <= segment.start + 0.25 &&
+      currentTime < segment.end
+      ? "resume"
+      : "seek";
+  }
+
   function playbackMode(value) {
     return ["pause", "continue", "repeat"].includes(value) ? value : "pause";
   }
@@ -326,6 +337,7 @@
     parseBridgeEvent,
     playbackMode,
     readerLesson,
+    segmentTransition,
     seekTarget,
     sentenceAtTime,
     sentenceResponse,
