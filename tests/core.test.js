@@ -134,6 +134,24 @@ test("normalizes persisted Playback Modes to Pause", () => {
   assert.equal(core.playbackMode(), "pause");
 });
 
+test("describes each visible companion readiness state", () => {
+  assert.equal(core.companionStatus("loading"), "Preparing video…");
+  assert.equal(core.companionStatus("ready"), "Video ready.");
+  assert.equal(
+    core.companionStatus("paused"),
+    "Playback paused. Press Play in the video to continue.",
+  );
+  assert.equal(
+    core.companionStatus("failed"),
+    "Video unavailable. Reload this page to retry.",
+  );
+  assert.equal(
+    core.companionStatus("unsupported"),
+    "This video isn’t supported in Sentence View.",
+  );
+  assert.equal(core.companionStatus(), null);
+});
+
 test("chooses each Sentence Boundary reaction without wrapping", () => {
   assert.equal(core.boundaryAction("pause", true), "stay");
   assert.equal(core.boundaryAction("continue", true), "next");

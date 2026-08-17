@@ -141,6 +141,16 @@
     return ["pause", "continue", "repeat"].includes(value) ? value : "pause";
   }
 
+  function companionStatus(value) {
+    return {
+      loading: "Preparing video…",
+      ready: "Video ready.",
+      paused: "Playback paused. Press Play in the video to continue.",
+      failed: "Video unavailable. Reload this page to retry.",
+      unsupported: "This video isn’t supported in Sentence View.",
+    }[value] || null;
+  }
+
   function boundaryAction(mode, hasNext) {
     if (playbackMode(mode) === "repeat") return "repeat";
     return mode === "continue" && hasNext ? "next" : "stay";
@@ -307,6 +317,7 @@
     bridgeEvent,
     boundaryAction,
     boundaryEvent,
+    companionStatus,
     explicitPlayback,
     initialCue,
     layoutAction,
