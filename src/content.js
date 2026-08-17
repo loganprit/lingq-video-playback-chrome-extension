@@ -127,7 +127,7 @@
   }
 
   function renderMode() {
-    for (const button of state.modeControl?.querySelectorAll("button") || []) {
+    for (const button of state.modeControl?.querySelectorAll("button[data-mode]") || []) {
       button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode));
     }
   }
@@ -141,7 +141,11 @@
     const control = document.createElement("div");
     control.className = "lspc-modes";
     control.setAttribute("role", "group");
-    control.setAttribute("aria-label", "Playback Mode");
+    control.setAttribute("aria-label", "Playback Mode at the next Sentence Boundary");
+    const label = document.createElement("span");
+    label.className = "lspc-mode-label";
+    label.textContent = "At next Sentence Boundary";
+    control.append(label);
     for (const mode of ["pause", "continue", "repeat"]) {
       const button = document.createElement("button");
       button.type = "button";
@@ -154,6 +158,21 @@
       });
       control.append(button);
     }
+    const help = document.createElement("span");
+    help.className = "lspc-shortcuts";
+    const helpButton = document.createElement("button");
+    helpButton.type = "button";
+    helpButton.className = "lspc-shortcuts-button";
+    helpButton.setAttribute("aria-label", "Keyboard shortcuts");
+    helpButton.setAttribute("aria-describedby", "lspc-shortcuts-tooltip");
+    helpButton.textContent = "?";
+    const tooltip = document.createElement("span");
+    tooltip.id = "lspc-shortcuts-tooltip";
+    tooltip.className = "lspc-shortcuts-tooltip";
+    tooltip.setAttribute("role", "tooltip");
+    tooltip.textContent = "Space: Play or pause · N: Next · R: Replay Now";
+    help.append(helpButton, tooltip);
+    control.append(help);
     footer.append(control);
     state.modeControl = control;
     renderMode();
