@@ -82,13 +82,17 @@
   flex-wrap: wrap;
 }
 
+.lspc-reader .main-footer {
+  min-height: 4.75rem;
+}
+
 .lspc-modes {
   position: relative;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
   align-items: center;
-  padding: 4px;
+  padding: 6px;
   border-radius: 10px;
   background: rgb(127 127 127 / 12%);
 }
