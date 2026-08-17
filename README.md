@@ -7,7 +7,7 @@ A private Chrome Manifest V3 extension that keeps LingQ's vocabulary and phrase 
 On a supported YouTube-backed LingQ lesson in **Sentence View**, the extension:
 
 - presents LingQ's full-video iframe as the visible 16:9 player;
-- cues the active Sentence's exact timestamp bounds paused;
+- seeks to the active Sentence's exact timestamp and pauses there;
 - keeps LingQ's real interactive Sentence and translation controls beneath it;
 - plays adjacent Sentences immediately through LingQ's native Previous and Next controls.
 
@@ -66,6 +66,6 @@ Supported scope is deliberately narrow:
 - Sentence View
 - YouTube-backed lessons
 
-LingQ has no public reader playback API. The selectors used by `src/content.js` may need updates after a LingQ redesign. The YouTube boundary signal uses the iframe API's state messages and is expected to be more stable.
+LingQ has no public reader playback API. The selectors used by `src/content.js` may need updates after a LingQ redesign. The extension watches the documented YouTube player time while a Sentence is playing so it can stop at the exact Sentence Boundary without reloading the video.
 
 See [`PLAN.md`](PLAN.md) for the implementation decisions and acceptance checks.

@@ -5,12 +5,13 @@
   if (!core || globalThis.__lingqSentencePlayerBridge) return;
   globalThis.__lingqSentencePlayerBridge = true;
 
+  let activeSegment = null;
+  let boundaryPending = null;
+  let boundaryTimer = null;
   let frame = null;
   let generation = 0;
   let player = null;
   let ready = false;
-  let pendingSegment = null;
-  let videoId = null;
 
   function emit(type, detail) {
     const event = core.bridgeEvent(type, generation, detail);
@@ -21,24 +22,59 @@
     for (const candidate of document.querySelectorAll(".lspc-player iframe")) {
       if (candidate.closest(".sentence--video-player, .sent-video-player")) continue;
       const id = core.youtubeEmbedId(candidate.src, location.href, location.origin);
-      if (id) return { candidate, id };
+      if (id) return candidate;
     }
     return null;
   }
 
-  function setSegment(method) {
-    if (!ready || !pendingSegment) return;
+  function stopBoundaryWatcher() {
+    if (boundaryTimer === null) return;
+    clearInterval(boundaryTimer);
+    boundaryTimer = null;
+  }
+
+  function failPlayer() {
+    boundaryPending = null;
+    stopBoundaryWatcher();
+    ready = false;
+    emit("error", { reason: "player-error" });
+  }
+
+  function playerReady() {
+    return ["getCurrentTime", "pauseVideo", "playVideo", "seekTo"].every(
+      (method) => typeof player?.[method] === "function",
+    );
+  }
+
+  function watchBoundary(currentTime) {
+    stopBoundaryWatcher();
+    if (!activeSegment || currentTime >= activeSegment.end) return;
+
+    // ponytail: active-tab polling is subject to browser timer throttling; use a
+    // native segment-end event if YouTube adds one.
+    boundaryTimer = setInterval(() => {
+      try {
+        if (player.getCurrentTime() < activeSegment.end) return;
+        stopBoundaryWatcher();
+        boundaryPending = activeSegment.end;
+        player.pauseVideo();
+      } catch {
+        failPlayer();
+      }
+    }, 50);
+  }
+
+  function seekSegment(segment, play) {
+    if (!ready) return;
     try {
-      const segment = pendingSegment;
-      player[method]({
-        videoId,
-        startSeconds: segment.start,
-        endSeconds: segment.end,
-      });
-      pendingSegment = null;
+      activeSegment = segment;
+      boundaryPending = null;
+      stopBoundaryWatcher();
+      if (!play) player.pauseVideo();
+      player.seekTo(segment.start, true);
+      player[play ? "playVideo" : "pauseVideo"]();
     } catch {
-      ready = false;
-      emit("error", { reason: "player-error" });
+      failPlayer();
     }
   }
 
@@ -46,18 +82,17 @@
     if (
       expectedGeneration !== generation ||
       ready ||
-      typeof player?.cueVideoById !== "function"
+      !playerReady()
     ) {
       return;
     }
     ready = true;
     emit("ready");
-    setSegment("cueVideoById");
   }
 
   function waitForPlayer(expectedGeneration, attempts = 400) {
     if (expectedGeneration !== generation || ready) return;
-    if (typeof player?.cueVideoById === "function") {
+    if (playerReady()) {
       markReady(expectedGeneration);
     } else if (attempts > 0) {
       setTimeout(() => waitForPlayer(expectedGeneration, attempts - 1), 50);
@@ -86,19 +121,35 @@
           },
           onError(event) {
             if (event.target !== player) return;
-            ready = false;
-            emit("error", { reason: "player-error" });
+            failPlayer();
           },
           onStateChange(event) {
             if (event.target !== player || !ready) return;
             try {
+              if (
+                event.data === core.PLAYER_STATES.PAUSED &&
+                boundaryPending !== null
+              ) {
+                const currentTime = boundaryPending;
+                boundaryPending = null;
+                emit("state", {
+                  state: core.PLAYER_STATES.ENDED,
+                  currentTime,
+                });
+                return;
+              }
+              const currentTime = event.target.getCurrentTime();
+              if (event.data === core.PLAYER_STATES.PLAYING) {
+                watchBoundary(currentTime);
+              } else {
+                stopBoundaryWatcher();
+              }
               emit("state", {
                 state: event.data,
-                currentTime: event.target.getCurrentTime(),
+                currentTime,
               });
             } catch {
-              ready = false;
-              emit("error", { reason: "player-error" });
+              failPlayer();
             }
           },
         },
@@ -115,14 +166,13 @@
 
   function bind(command) {
     generation = command.generation;
-    pendingSegment = null;
     const found = playerFrame();
     if (!found) {
       emit("error", { reason: "invalid-video" });
       return;
     }
 
-    if (found.candidate === frame && player) {
+    if (found === frame && player) {
       if (ready) {
         emit("ready");
       } else {
@@ -131,8 +181,10 @@
       return;
     }
 
-    frame = found.candidate;
-    videoId = found.id;
+    stopBoundaryWatcher();
+    activeSegment = null;
+    boundaryPending = null;
+    frame = found;
     player = null;
     ready = false;
     attach(generation);
@@ -148,14 +200,13 @@
     } else if (command.generation === generation && ready) {
       try {
         if (command.type === "play" || command.type === "pause") {
+          if (command.type === "pause") stopBoundaryWatcher();
           player[`${command.type}Video`]();
         } else {
-          pendingSegment = command.segment;
-          setSegment(command.type === "load" ? "loadVideoById" : "cueVideoById");
+          seekSegment(command.segment, command.type === "seek-play");
         }
       } catch {
-        ready = false;
-        emit("error", { reason: "player-error" });
+        failPlayer();
       }
     }
   });

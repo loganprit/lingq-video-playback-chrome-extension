@@ -184,12 +184,12 @@ test("resolves shortcuts only for an unmodified page-owned key press", () => {
 
 test("accepts only fixed validated player commands", () => {
   const bind = core.bridgeCommand("bind", 3);
-  const cue = core.bridgeCommand("cue", 3, { start: 0.55, end: 2.37 });
-  const load = core.bridgeCommand("load", 3, { start: 0.55, end: 2.37 });
+  const seek = core.bridgeCommand("seek", 3, { start: 0.55, end: 2.37 });
+  const seekPlay = core.bridgeCommand("seek-play", 3, { start: 0.55, end: 2.37 });
 
   assert.deepEqual(core.parseBridgeCommand(bind), bind);
-  assert.deepEqual(core.parseBridgeCommand(cue), cue);
-  assert.deepEqual(core.parseBridgeCommand(load), load);
+  assert.deepEqual(core.parseBridgeCommand(seek), seek);
+  assert.deepEqual(core.parseBridgeCommand(seekPlay), seekPlay);
   assert.deepEqual(
     core.parseBridgeCommand(core.bridgeCommand("play", 3)),
     core.bridgeCommand("play", 3),
@@ -198,9 +198,10 @@ test("accepts only fixed validated player commands", () => {
     core.parseBridgeCommand(core.bridgeCommand("pause", 3)),
     core.bridgeCommand("pause", 3),
   );
-  assert.equal(core.bridgeCommand("seekTo", 3, { start: 0.55, end: 2.37 }), null);
+  assert.equal(core.bridgeCommand("cue", 3, { start: 0.55, end: 2.37 }), null);
+  assert.equal(core.bridgeCommand("load", 3, { start: 0.55, end: 2.37 }), null);
   assert.equal(core.bridgeCommand("bind", 0), null);
-  assert.equal(core.bridgeCommand("cue", 3, { start: 2.37, end: 0.55 }), null);
+  assert.equal(core.bridgeCommand("seek", 3, { start: 2.37, end: 0.55 }), null);
   assert.equal(
     core.parseBridgeCommand({ ...bind, source: "untrusted-page-script" }),
     null,
