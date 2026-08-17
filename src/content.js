@@ -568,10 +568,11 @@
     if (!action) return;
 
     event.preventDefault();
+    event.stopImmediatePropagation();
     if (action === "toggle") togglePlayback();
     else if (action === "next") navigate("next");
     else replayNow();
-  });
+  }, true);
 
   new MutationObserver(scheduleSync).observe(document.documentElement, {
     childList: true,
