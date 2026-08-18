@@ -185,8 +185,11 @@ test("resolves shortcuts only for an unmodified page-owned key press", () => {
   assert.equal(core.shortcutAction({ key: "Space" }), "toggle");
   assert.equal(core.shortcutAction({ key: "N" }), "next");
   assert.equal(core.shortcutAction({ key: "R" }), "replay");
+  assert.equal(core.shortcutAction({ key: "Space", repeat: true }), "consume");
+  assert.equal(core.shortcutAction({ key: "N", repeat: true }), null);
+  assert.equal(core.shortcutAction({ key: "R", repeat: true }), null);
 
-  for (const blocked of ["modified", "repeat", "editable", "interactive"]) {
+  for (const blocked of ["modified", "editable", "interactive"]) {
     assert.equal(core.shortcutAction({ key: "R", [blocked]: true }), null);
   }
   assert.equal(core.shortcutAction({ key: "X" }), null);

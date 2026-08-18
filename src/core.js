@@ -179,13 +179,13 @@
     if (
       !value ||
       value.modified ||
-      value.repeat ||
       value.editable ||
       value.interactive
     ) {
       return null;
     }
 
+    if (value.repeat) return value.key === "Space" ? "consume" : null;
     return { Space: "toggle", N: "next", R: "replay" }[value.key] || null;
   }
 

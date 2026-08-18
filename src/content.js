@@ -20,6 +20,7 @@
     mode: "pause",
     modeControl: null,
     pendingCue: null,
+    playbackQueue: [],
     playerState: core.PLAYER_STATES.UNSTARTED,
     playerTime: 0,
     ready: false,
@@ -93,6 +94,7 @@
     state.frame = null;
     state.ready = false;
     state.pendingCue = null;
+    state.playbackQueue = [];
     state.playerState = core.PLAYER_STATES.UNSTARTED;
     state.playerTime = 0;
     state.segment = null;
@@ -407,15 +409,24 @@
     }
   }
 
+  function sendPlayback(command) {
+    if (command === "load") replayNow();
+    else postBridgeCommand(core.bridgeCommand(command, state.generation));
+  }
+
   function togglePlayback() {
     if (!state.ready || !state.segment) return;
     const command = core.explicitPlayback(
-      state.playerState,
+      state.playbackQueue.at(-1)?.expectedState ?? state.playerState,
       state.playerTime,
       state.segment,
     );
-    if (command === "load") replayNow();
-    else postBridgeCommand(core.bridgeCommand(command, state.generation));
+    state.playbackQueue.push({
+      command,
+      expectedState:
+        command === "pause" ? core.PLAYER_STATES.PAUSED : core.PLAYER_STATES.PLAYING,
+    });
+    if (state.playbackQueue.length === 1) sendPlayback(command);
   }
 
   function targetKind(target) {
@@ -453,8 +464,15 @@
     }
 
     if (event.type === "state") {
-      state.playerState = event.detail.state;
       state.playerTime = event.detail.currentTime;
+      const pendingPlayback = state.playbackQueue[0];
+      if (!pendingPlayback || pendingPlayback.expectedState === event.detail.state) {
+        state.playerState = event.detail.state;
+      }
+      if (pendingPlayback?.expectedState === event.detail.state) {
+        state.playbackQueue.shift();
+        if (state.playbackQueue[0]) sendPlayback(state.playbackQueue[0].command);
+      }
       if (
         state.synchronizing &&
         [core.PLAYER_STATES.PAUSED, core.PLAYER_STATES.CUED].includes(
@@ -519,6 +537,7 @@
 
     warnOnce(`player bridge failed: ${event.detail.reason}`);
     state.ready = false;
+    state.playbackQueue = [];
     if (event.detail.reason === "invalid-video") {
       const footer = state.layout?.footer;
       restoreLayout();
@@ -569,6 +588,7 @@
 
     event.preventDefault();
     event.stopImmediatePropagation();
+    if (action === "consume") return;
     if (action === "toggle") togglePlayback();
     else if (action === "next") navigate("next");
     else replayNow();
