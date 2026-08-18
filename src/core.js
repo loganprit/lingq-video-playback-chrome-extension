@@ -185,8 +185,27 @@
       return null;
     }
 
+    const action = { Space: "toggle", N: "next", R: "replay" }[value.key];
+    if (!action) return null;
+    if (value.type === "keyup") return "consume";
     if (value.repeat) return value.key === "Space" ? "consume" : null;
-    return { Space: "toggle", N: "next", R: "replay" }[value.key] || null;
+    return action;
+  }
+
+  function claimShortcut(event, enabled, target) {
+    if (!enabled) return null;
+    const action = shortcutAction({
+      key: event.code === "Space" ? "Space" : event.key.toUpperCase(),
+      type: event.type,
+      modified: event.altKey || event.ctrlKey || event.metaKey || event.shiftKey,
+      repeat: event.repeat,
+      ...target,
+    });
+    if (!action) return null;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return action;
   }
 
   function validGeneration(value) {
@@ -328,6 +347,7 @@
     bridgeEvent,
     boundaryAction,
     boundaryEvent,
+    claimShortcut,
     companionStatus,
     explicitPlayback,
     initialCue,

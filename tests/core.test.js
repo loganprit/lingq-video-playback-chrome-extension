@@ -185,6 +185,9 @@ test("resolves shortcuts only for an unmodified page-owned key press", () => {
   assert.equal(core.shortcutAction({ key: "Space" }), "toggle");
   assert.equal(core.shortcutAction({ key: "N" }), "next");
   assert.equal(core.shortcutAction({ key: "R" }), "replay");
+  assert.equal(core.shortcutAction({ key: "Space", type: "keyup" }), "consume");
+  assert.equal(core.shortcutAction({ key: "N", type: "keyup" }), "consume");
+  assert.equal(core.shortcutAction({ key: "R", type: "keyup" }), "consume");
   assert.equal(core.shortcutAction({ key: "Space", repeat: true }), "consume");
   assert.equal(core.shortcutAction({ key: "N", repeat: true }), null);
   assert.equal(core.shortcutAction({ key: "R", repeat: true }), null);
@@ -193,6 +196,38 @@ test("resolves shortcuts only for an unmodified page-owned key press", () => {
     assert.equal(core.shortcutAction({ key: "R", [blocked]: true }), null);
   }
   assert.equal(core.shortcutAction({ key: "X" }), null);
+});
+
+test("claims a full Space press before LingQ can handle it", () => {
+  const page = new EventTarget();
+  const actions = [];
+  let lingqAudioToggles = 0;
+
+  const companion = (event) => {
+    const action = core.claimShortcut(event, true, {
+      editable: false,
+      interactive: false,
+    });
+    if (action !== "consume") actions.push(action);
+  };
+  page.addEventListener("keydown", companion);
+  page.addEventListener("keyup", companion);
+  page.addEventListener("keydown", () => { lingqAudioToggles += 1; });
+  page.addEventListener("keyup", () => { lingqAudioToggles += 1; });
+
+  for (const type of ["keydown", "keyup"]) {
+    const event = new Event(type, { cancelable: true });
+    Object.defineProperties(event, {
+      code: { value: "Space" },
+      key: { value: " " },
+      repeat: { value: false },
+    });
+    page.dispatchEvent(event);
+    assert.equal(event.defaultPrevented, true);
+  }
+
+  assert.deepEqual(actions, ["toggle"]);
+  assert.equal(lingqAudioToggles, 0);
 });
 
 test("accepts only fixed validated player commands", () => {
