@@ -4,6 +4,10 @@
 
 When ticket implementation is complete, push its branch, merge it into `main` through a pull request, and verify `origin/main` contains the merged commit before reporting completion.
 
+## Review gate
+
+Before considering ticket implementation complete, get an explicit thumbs-up from a code-review agent.
+
 ## Agent skills
 
 ### Issue tracker
