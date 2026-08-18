@@ -433,15 +433,14 @@
     const editable = Boolean(
       target?.isContentEditable || target?.closest?.("input, textarea, select, [contenteditable]"),
     );
-    const interactive = Boolean(
-      target?.closest?.(
-        "a, button, input, select, textarea, summary, audio[controls], video[controls], " +
-          "[href], [tabindex], [role='button'], [role='link'], [role='checkbox'], " +
-          "[role='radio'], [role='switch'], [role='slider'], [role='spinbutton'], " +
-          "[role='textbox'], [role='combobox'], [role='listbox'], [role='menuitem'], " +
-          "[role='option'], [role='tab']",
-      ),
+    const interactiveTarget = target?.closest?.(
+      "a, button, input, select, textarea, summary, audio[controls], video[controls], " +
+        "[href], [tabindex], [role='button'], [role='link'], [role='checkbox'], " +
+        "[role='radio'], [role='switch'], [role='slider'], [role='spinbutton'], " +
+        "[role='textbox'], [role='combobox'], [role='listbox'], [role='menuitem'], " +
+        "[role='option'], [role='tab']",
     );
+    const interactive = Boolean(interactiveTarget?.getClientRects().length);
     return { editable, interactive };
   }
 
@@ -576,23 +575,21 @@
     true,
   );
 
-  document.addEventListener("keydown", (event) => {
-    if (!state.layout || !state.ready) return;
-    const action = core.shortcutAction({
-      key: event.code === "Space" ? "Space" : event.key.toUpperCase(),
-      modified: event.altKey || event.ctrlKey || event.metaKey || event.shiftKey,
-      repeat: event.repeat,
-      ...targetKind(event.target),
-    });
+  function handleShortcut(event) {
+    const action = core.claimShortcut(
+      event,
+      state.layout && state.ready,
+      targetKind(event.target),
+    );
     if (!action) return;
-
-    event.preventDefault();
-    event.stopImmediatePropagation();
     if (action === "consume") return;
     if (action === "toggle") togglePlayback();
     else if (action === "next") navigate("next");
     else replayNow();
-  }, true);
+  }
+
+  document.addEventListener("keydown", handleShortcut, true);
+  document.addEventListener("keyup", handleShortcut, true);
 
   new MutationObserver(scheduleSync).observe(document.documentElement, {
     childList: true,
