@@ -1,23 +1,13 @@
 # Repository instructions
 
-## Ticket completion
+## Ticket delivery
 
-When ticket implementation is complete, push its branch, merge it into `main` through a pull request, and verify `origin/main` contains the merged commit before reporting completion.
+For ticket implementation, continue through review, branch push, PR merge into `main`, and verification that `origin/main` contains the merged commit. A narrower user-requested endpoint, such as a review or an open PR, takes precedence.
 
-## Review gate
+Obtain an independent code-review agent's explicit approval of the exact final commit before completing ticket implementation. Repeat review after any later change.
 
-Before considering ticket implementation complete, get an explicit thumbs-up from a code-review agent on the exact final commit. Repeat the review after any subsequent change.
+## Task-specific references
 
-## Agent skills
-
-### Issue tracker
-
-Issues and specs are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Use the five default triage labels. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-This is a single-context repository. See `docs/agents/domain.md`.
+- For GitHub issue work, read `docs/agents/issue-tracker.md`.
+- When triaging issues, use the label mapping in `docs/agents/triage-labels.md`.
+- When domain terminology or architectural decisions matter, read `docs/agents/domain.md` and the relevant domain documents it identifies.
