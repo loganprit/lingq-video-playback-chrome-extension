@@ -198,36 +198,76 @@ test("resolves shortcuts only for an unmodified page-owned key press", () => {
   assert.equal(core.shortcutAction({ key: "X" }), null);
 });
 
-test("claims a full Space press before LingQ can handle it", () => {
+test("resolves Space from a focused control but leaves letters to the control", () => {
+  const control = { interactive: true };
+  assert.equal(core.shortcutAction({ key: "Space", ...control }), "toggle");
+  assert.equal(core.shortcutAction({ key: "Space", type: "keyup", ...control }), "consume");
+  assert.equal(core.shortcutAction({ key: "Space", repeat: true, ...control }), "consume");
+  assert.equal(core.shortcutAction({ key: "Space", modified: true, ...control }), null);
+
+  for (const key of ["N", "R"]) {
+    assert.equal(core.shortcutAction({ key, ...control }), null);
+    assert.equal(core.shortcutAction({ key, type: "keyup", ...control }), null);
+  }
+
+  for (const field of [{ editable: true }, { editable: true, interactive: true }]) {
+    assert.equal(core.shortcutAction({ key: "Space", ...field }), null);
+    assert.equal(core.shortcutAction({ key: "Space", type: "keyup", ...field }), null);
+    assert.equal(core.shortcutAction({ key: "Space", repeat: true, ...field }), null);
+  }
+});
+
+function holdSpace(target) {
   const page = new EventTarget();
   const actions = [];
+  const claimed = [];
   let lingqAudioToggles = 0;
 
   const companion = (event) => {
-    const action = core.claimShortcut(event, true, {
-      editable: false,
-      interactive: false,
-    });
-    if (action !== "consume") actions.push(action);
+    const action = core.claimShortcut(event, true, target);
+    if (action && action !== "consume") actions.push(action);
   };
   page.addEventListener("keydown", companion);
   page.addEventListener("keyup", companion);
   page.addEventListener("keydown", () => { lingqAudioToggles += 1; });
   page.addEventListener("keyup", () => { lingqAudioToggles += 1; });
 
-  for (const type of ["keydown", "keyup"]) {
+  for (const [type, repeat] of [["keydown", false], ["keydown", true], ["keyup", false]]) {
     const event = new Event(type, { cancelable: true });
     Object.defineProperties(event, {
       code: { value: "Space" },
       key: { value: " " },
-      repeat: { value: false },
+      repeat: { value: repeat },
     });
     page.dispatchEvent(event);
-    assert.equal(event.defaultPrevented, true);
+    claimed.push(event.defaultPrevented);
   }
 
-  assert.deepEqual(actions, ["toggle"]);
-  assert.equal(lingqAudioToggles, 0);
+  return { actions, claimed, lingqAudioToggles };
+}
+
+test("claims a full Space press before LingQ can handle it", () => {
+  assert.deepEqual(holdSpace({ editable: false, interactive: false }), {
+    actions: ["toggle"],
+    claimed: [true, true, true],
+    lingqAudioToggles: 0,
+  });
+});
+
+test("claims a full Space press while a button or link owns focus", () => {
+  assert.deepEqual(holdSpace({ editable: false, interactive: true }), {
+    actions: ["toggle"],
+    claimed: [true, true, true],
+    lingqAudioToggles: 0,
+  });
+});
+
+test("leaves a Space press in a text field to the page", () => {
+  assert.deepEqual(holdSpace({ editable: true, interactive: true }), {
+    actions: [],
+    claimed: [false, false, false],
+    lingqAudioToggles: 3,
+  });
 });
 
 test("accepts only fixed validated player commands", () => {

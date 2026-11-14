@@ -176,11 +176,13 @@
   }
 
   function shortcutAction(value) {
+    // LingQ answers Space on a focused button or link by playing its lesson audio,
+    // so only the letter keys yield to a focused control.
     if (
       !value ||
       value.modified ||
       value.editable ||
-      value.interactive
+      (value.interactive && value.key !== "Space")
     ) {
       return null;
     }
