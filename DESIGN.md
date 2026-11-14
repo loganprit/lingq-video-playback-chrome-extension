@@ -108,6 +108,11 @@ The mode group uses a 10px radius; rectangular controls and tooltips use 7px. Th
 - **Buttons:** native buttons with at least `44px` width and height, transparent at rest, Playback Violet when selected.
 - **Focus:** 2px system Highlight outline with 2px offset.
 
+### Replay Now
+
+- **Button:** a native button after the Playback Mode buttons, styled like an unselected mode, with a 6px extra leading gap so it reads as an action rather than a fourth mode.
+- **Tooltip:** the Shortcut Help tooltip style, naming the `R` key.
+
 ### Shortcut Help
 
 - **Button:** circular 44px target with an accessible “Keyboard shortcuts” label.

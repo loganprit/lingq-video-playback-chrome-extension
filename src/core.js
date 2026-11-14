@@ -196,7 +196,7 @@
       return null;
     }
 
-    const action = { Space: "toggle", N: "next", R: "replay" }[value.key];
+    const action = { Space: "toggle", N: "next", P: "previous", R: "replay" }[value.key];
     if (!action) return null;
     if (value.type === "keyup") return "consume";
     if (value.repeat) return value.key === "Space" ? "consume" : null;

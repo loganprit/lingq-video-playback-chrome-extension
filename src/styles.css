@@ -97,6 +97,10 @@
   background: rgb(127 127 127 / 12%);
 }
 
+.lspc-mode-group {
+  display: contents;
+}
+
 .lspc-mode-label {
   padding-inline: 8px 4px;
   font-size: 0.75rem;
@@ -123,8 +127,12 @@
   cursor: pointer;
 }
 
-.lspc-shortcuts {
+.lspc-tip {
   position: relative;
+}
+
+.lspc-replay {
+  margin-inline-start: 6px;
 }
 
 .lspc-modes .lspc-shortcuts-button {
@@ -132,7 +140,7 @@
   border-radius: 50%;
 }
 
-.lspc-shortcuts-tooltip {
+.lspc-tooltip {
   position: absolute;
   z-index: 1;
   right: 0;
@@ -151,8 +159,8 @@
   transition: opacity 120ms ease, transform 120ms ease;
 }
 
-.lspc-shortcuts:hover .lspc-shortcuts-tooltip,
-.lspc-shortcuts:focus-within .lspc-shortcuts-tooltip {
+.lspc-tip:hover .lspc-tooltip,
+.lspc-tip:focus-within .lspc-tooltip {
   opacity: 1;
   transform: translateY(0);
 }
