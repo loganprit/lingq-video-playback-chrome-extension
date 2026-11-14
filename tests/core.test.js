@@ -88,6 +88,27 @@ test("cues initially only when both player and active bounds are valid", () => {
   assert.equal(core.initialCue([{ timestamp: [2, 1] }], "s1", true), null);
 });
 
+test("plays the activation cue only for a live play request in the same lesson", () => {
+  const request = { lessonKey: "es:1", until: 5000 };
+  const activation = { play: false, activation: true, lessonKey: "es:1" };
+
+  assert.equal(core.cueCommand(activation, request, 5000), "seek-play");
+  assert.equal(core.cueCommand(activation, null, 5000), "seek");
+  assert.equal(core.cueCommand(activation, request, 5001), "seek");
+  assert.equal(
+    core.cueCommand({ ...activation, lessonKey: "es:2" }, request, 5000),
+    "seek",
+  );
+  assert.equal(
+    core.cueCommand({ ...activation, activation: false }, request, 5000),
+    "seek",
+  );
+  assert.equal(
+    core.cueCommand({ ...activation, activation: false, play: true }, null, 5000),
+    "seek-play",
+  );
+});
+
 test("accepts only same-origin JavaScript-enabled YouTube embeds", () => {
   const origin = "https://www.lingq.com";
   const baseUrl = `${origin}/unused`;
