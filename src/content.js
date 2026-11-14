@@ -5,6 +5,9 @@
   if (!core || window !== window.top) return;
 
   const STORAGE_KEY = "playbackMode";
+  // A play request expires when no activation cue follows it. Ten seconds
+  // covers a slow YouTube embed between the click and the bridge's ready event.
+  const PLAY_REQUEST_MS = 10000;
 
   const state = {
     blockedFrame: null,
@@ -23,6 +26,7 @@
     playbackQueue: [],
     playerState: core.PLAYER_STATES.UNSTARTED,
     playerTime: 0,
+    playRequest: null,
     ready: false,
     recoveryAttemptedLessonKey: null,
     revision: 0,
@@ -75,6 +79,9 @@
     if (state.frame) {
       postBridgeCommand(core.bridgeCommand("pause", state.generation));
       state.generation += 1;
+      // mount() also runs this reset on the way to the first bind, while the
+      // request still waits for its player, so only a bound player drops it.
+      state.playRequest = null;
     }
     if (layout) {
       layout.modal.classList.remove("lspc-player");
@@ -248,13 +255,19 @@
 
   function cuePending() {
     if (!state.ready || !state.pendingCue || state.pendingCue.key === state.cueKey) return;
-    if (state.pendingCue.play) state.synchronizing = true;
+    const type = core.cueCommand(
+      {
+        play: state.pendingCue.play,
+        activation: state.cueKey === null,
+        lessonKey: state.lessonKey,
+      },
+      state.playRequest,
+      Date.now(),
+    );
+    state.playRequest = null;
+    if (type === "seek-play") state.synchronizing = true;
     postBridgeCommand(
-      core.bridgeCommand(
-        state.pendingCue.play ? "seek-play" : "seek",
-        state.generation,
-        state.pendingCue.segment,
-      ),
+      core.bridgeCommand(type, state.generation, state.pendingCue.segment),
     );
     state.ignoreResetUntil = Date.now() + 1000;
     state.boundaryArmed = false;
@@ -567,6 +580,17 @@
     (event) => {
       const direction = navigationDirection(event.target);
       if (direction) armNavigation(direction);
+      // The player-unavailable recovery clicks this button itself. Only the
+      // user's own click asks to watch.
+      if (
+        event.isTrusted &&
+        event.target?.closest?.("button")?.querySelector(".svg-icon--videoYT-s")
+      ) {
+        state.playRequest = {
+          lessonKey: core.readerLesson(location.pathname)?.key,
+          until: Date.now() + PLAY_REQUEST_MS,
+        };
+      }
       if (state.layout && event.target?.closest?.(".sentence-text .sentence-item")) {
         state.boundaryArmed = false;
         postBridgeCommand(core.bridgeCommand("pause", state.generation));

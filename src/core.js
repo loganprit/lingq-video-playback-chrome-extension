@@ -108,6 +108,15 @@
     return playerAvailable ? activeSegment(sentences, sentenceId) : null;
   }
 
+  function cueCommand(cue, request, now) {
+    const requested =
+      cue.activation &&
+      Boolean(request) &&
+      request.lessonKey === cue.lessonKey &&
+      now <= request.until;
+    return cue.play || requested ? "seek-play" : "seek";
+  }
+
   function adjacentSentence(sentenceNumber, sentenceCount, direction) {
     if (
       !Number.isSafeInteger(sentenceNumber) ||
@@ -351,6 +360,7 @@
     boundaryEvent,
     claimShortcut,
     companionStatus,
+    cueCommand,
     explicitPlayback,
     initialCue,
     layoutAction,
