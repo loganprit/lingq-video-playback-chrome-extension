@@ -205,16 +205,21 @@ test("reacts once only after expected bounded playback", () => {
 test("resolves shortcuts only for an unmodified page-owned key press", () => {
   assert.equal(core.shortcutAction({ key: "Space" }), "toggle");
   assert.equal(core.shortcutAction({ key: "N" }), "next");
+  assert.equal(core.shortcutAction({ key: "P" }), "previous");
   assert.equal(core.shortcutAction({ key: "R" }), "replay");
   assert.equal(core.shortcutAction({ key: "Space", type: "keyup" }), "consume");
   assert.equal(core.shortcutAction({ key: "N", type: "keyup" }), "consume");
+  assert.equal(core.shortcutAction({ key: "P", type: "keyup" }), "consume");
   assert.equal(core.shortcutAction({ key: "R", type: "keyup" }), "consume");
   assert.equal(core.shortcutAction({ key: "Space", repeat: true }), "consume");
   assert.equal(core.shortcutAction({ key: "N", repeat: true }), null);
+  assert.equal(core.shortcutAction({ key: "P", repeat: true }), null);
   assert.equal(core.shortcutAction({ key: "R", repeat: true }), null);
 
   for (const blocked of ["modified", "editable", "interactive"]) {
-    assert.equal(core.shortcutAction({ key: "R", [blocked]: true }), null);
+    for (const key of ["N", "P", "R"]) {
+      assert.equal(core.shortcutAction({ key, [blocked]: true }), null);
+    }
   }
   assert.equal(core.shortcutAction({ key: "X" }), null);
 });
@@ -226,7 +231,7 @@ test("resolves Space from a focused control but leaves letters to the control", 
   assert.equal(core.shortcutAction({ key: "Space", repeat: true, ...control }), "consume");
   assert.equal(core.shortcutAction({ key: "Space", modified: true, ...control }), null);
 
-  for (const key of ["N", "R"]) {
+  for (const key of ["N", "P", "R"]) {
     assert.equal(core.shortcutAction({ key, ...control }), null);
     assert.equal(core.shortcutAction({ key, type: "keyup", ...control }), null);
   }
@@ -289,6 +294,49 @@ test("leaves a Space press in a text field to the page", () => {
     claimed: [false, false, false],
     lingqAudioToggles: 3,
   });
+});
+
+test("claims the previous-Sentence key in the same cases as Next", () => {
+  const claim = (key, { type = "keydown", enabled = true, target = {}, ...init } = {}) => {
+    const event = new Event(type, { cancelable: true });
+    Object.defineProperties(event, {
+      code: { value: `Key${key.toUpperCase()}` },
+      key: { value: key },
+      repeat: { value: Boolean(init.repeat) },
+      altKey: { value: Boolean(init.altKey) },
+      ctrlKey: { value: Boolean(init.ctrlKey) },
+      metaKey: { value: Boolean(init.metaKey) },
+      shiftKey: { value: Boolean(init.shiftKey) },
+    });
+    const action = core.claimShortcut(event, enabled, {
+      editable: false,
+      interactive: false,
+      ...target,
+    });
+    return { action, claimed: event.defaultPrevented };
+  };
+  const cases = [
+    [{}, "previous"],
+    [{ type: "keyup" }, "consume"],
+    [{ repeat: true }, null],
+    [{ altKey: true }, null],
+    [{ ctrlKey: true }, null],
+    [{ metaKey: true }, null],
+    [{ shiftKey: true }, null],
+    [{ target: { editable: true } }, null],
+    [{ target: { interactive: true } }, null],
+    [{ enabled: false }, null],
+  ];
+
+  for (const [init, expected] of cases) {
+    const previous = claim("p", init);
+    const next = claim("n", init);
+    assert.deepEqual(previous, { action: expected, claimed: expected !== null });
+    assert.deepEqual(next, {
+      action: expected === "previous" ? "next" : expected,
+      claimed: previous.claimed,
+    });
+  }
 });
 
 test("accepts only fixed validated player commands", () => {

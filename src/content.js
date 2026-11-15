@@ -143,6 +143,12 @@
     }
   }
 
+  // A focused button keeps the letter shortcuts for itself, so a mouse click
+  // gives focus back to the page. Keyboard activation (detail 0) keeps it.
+  function releasePointerFocus(event) {
+    if (event.detail > 0) event.currentTarget.blur();
+  }
+
   function mountModeControl() {
     const footer = state.layout?.footer;
     if (!footer) return;
@@ -151,37 +157,60 @@
     state.modeControl?.remove();
     const control = document.createElement("div");
     control.className = "lspc-modes";
-    control.setAttribute("role", "group");
-    control.setAttribute("aria-label", "Playback Mode at the next Sentence Boundary");
+    const modes = document.createElement("div");
+    modes.className = "lspc-mode-group";
+    modes.setAttribute("role", "group");
+    modes.setAttribute("aria-label", "Playback Mode at the next Sentence Boundary");
     const label = document.createElement("span");
     label.className = "lspc-mode-label";
     label.textContent = "At next Sentence Boundary";
-    control.append(label);
+    modes.append(label);
     for (const mode of ["pause", "continue", "repeat"]) {
       const button = document.createElement("button");
       button.type = "button";
       button.dataset.mode = mode;
       button.textContent = mode[0].toUpperCase() + mode.slice(1);
-      button.addEventListener("click", () => {
+      button.addEventListener("click", (event) => {
+        releasePointerFocus(event);
         state.mode = mode;
         renderMode();
         void chrome.storage.local.set({ [STORAGE_KEY]: mode });
       });
-      control.append(button);
+      modes.append(button);
     }
+    control.append(modes);
+    const replay = document.createElement("span");
+    replay.className = "lspc-tip lspc-replay";
+    const replayButton = document.createElement("button");
+    replayButton.type = "button";
+    replayButton.textContent = "Replay Now";
+    replayButton.setAttribute("aria-describedby", "lspc-replay-tooltip");
+    replayButton.setAttribute("aria-keyshortcuts", "R");
+    replayButton.addEventListener("click", (event) => {
+      releasePointerFocus(event);
+      replayNow();
+    });
+    const replayTooltip = document.createElement("span");
+    replayTooltip.id = "lspc-replay-tooltip";
+    replayTooltip.className = "lspc-tooltip";
+    replayTooltip.setAttribute("role", "tooltip");
+    replayTooltip.textContent = "Shortcut: R";
+    replay.append(replayButton, replayTooltip);
+    control.append(replay);
     const help = document.createElement("span");
-    help.className = "lspc-shortcuts";
+    help.className = "lspc-tip";
     const helpButton = document.createElement("button");
     helpButton.type = "button";
     helpButton.className = "lspc-shortcuts-button";
+    helpButton.addEventListener("click", releasePointerFocus);
     helpButton.setAttribute("aria-label", "Keyboard shortcuts");
     helpButton.setAttribute("aria-describedby", "lspc-shortcuts-tooltip");
     helpButton.textContent = "?";
     const tooltip = document.createElement("span");
     tooltip.id = "lspc-shortcuts-tooltip";
-    tooltip.className = "lspc-shortcuts-tooltip";
+    tooltip.className = "lspc-tooltip";
     tooltip.setAttribute("role", "tooltip");
-    tooltip.textContent = "Space: Play or pause · N: Next · R: Replay Now";
+    tooltip.textContent = "Space: Play or pause · P: Previous · N: Next · R: Replay Now";
     help.append(helpButton, tooltip);
     control.append(help);
     footer.append(control);
@@ -627,7 +656,7 @@
     if (!action) return;
     if (action === "consume") return;
     if (action === "toggle") togglePlayback();
-    else if (action === "next") navigate("next");
+    else if (action === "next" || action === "previous") navigate(action);
     else replayNow();
   }
 

@@ -19,9 +19,10 @@ The extension drives only the visible player through the documented YouTube IFra
 | --- | --- |
 | `Space` | Play/pause |
 | `N` | Go to the next sentence |
-| `R` | Replay the current sentence once |
+| `P` | Go to the previous sentence |
+| `R` | Replay the current sentence once (also the **Replay Now** button) |
 
-Shortcuts are ignored for modified or repeated key presses and while an editable control owns focus. `N` and `R` are also ignored while a button, link, or other interactive control owns focus. `Space` still plays or pauses the video from a focused button or link, because LingQ would otherwise play its own lesson audio.
+Shortcuts are ignored for modified or repeated key presses and while an editable control owns focus. `N`, `P`, and `R` are also ignored while a button, link, or other interactive control owns focus. Clicking a companion button with the mouse returns focus to the page, so the letter keys keep working. `Space` still plays or pauses the video from a focused button or link, because LingQ would otherwise play its own lesson audio.
 
 ## Install
 
