@@ -33,6 +33,8 @@ A short status appears just above the footer only while the video loads or when 
 
 Shortcuts are ignored for modified or repeated key presses and while an editable control owns focus. `N`, `P`, and `R` are also ignored while a button, link, or other interactive control owns focus. Clicking a companion button or menu option with the mouse returns focus to the page, so the letter keys keep working. `Space` still plays or pauses the video from a focused button or link, because LingQ would otherwise play its own lesson audio. Inside the open Playback Mode menu, `N`, `P`, `R`, and `Space` never trigger shortcuts. `Space` chooses the focused option, and the menu keeps its navigation keys from LingQ. On the Playback Mode button itself, `Escape` and `Space` never reach LingQ.
 
+Anywhere else on the page, `Escape` closes the video, as it does in LingQ without the extension. Click LingQ's YouTube button to open the video again.
+
 ## Install
 
 ### Persistent local install
