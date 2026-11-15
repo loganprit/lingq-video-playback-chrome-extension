@@ -326,6 +326,7 @@
       state.frame = player.frame;
       state.ready = false;
       state.cueKey = null;
+      state.autoplayBlocked = false;
       state.generation += 1;
       setStatus("loading");
       postBridgeCommand(core.bridgeCommand("bind", state.generation));
@@ -478,8 +479,9 @@
     }
 
     if (event.type === "blocked") {
-      // The browser refused to play, so the player never left its last state.
-      // Space should play, and the status should ask for Play (#7 story 40).
+      // The browser refused to play, so the player never left its last state,
+      // though the bridge may already have reported PLAYING for a resume. Space
+      // should play, and the status should ask for Play (#7 story 40).
       state.autoplayBlocked = true;
       state.playerState = core.PLAYER_STATES.PAUSED;
       state.playbackQueue = [];
