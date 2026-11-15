@@ -11,6 +11,7 @@
   let generation = 0;
   let player = null;
   let ready = false;
+  const subscribed = new WeakSet();
 
   function emit(type, detail) {
     const event = core.bridgeEvent(type, generation, detail);
@@ -110,6 +111,32 @@
     }
   }
 
+  function onReady(event) {
+    if (event.target === player) markReady(generation);
+  }
+
+  function onError(event) {
+    if (event.target === player) failPlayer();
+  }
+
+  function onStateChange(event) {
+    if (event.target !== player || !ready) return;
+    try {
+      const currentTime = event.target.getCurrentTime();
+      if (event.data === core.PLAYER_STATES.PLAYING) {
+        watchBoundary(currentTime);
+      } else {
+        stopBoundaryWatcher();
+      }
+      emit("state", {
+        state: event.data,
+        currentTime,
+      });
+    } catch {
+      failPlayer();
+    }
+  }
+
   function attach(expectedGeneration, attempts = 400) {
     if (expectedGeneration !== generation) return;
     if (!globalThis.YT?.Player) {
@@ -122,35 +149,20 @@
     }
 
     try {
-      player = new YT.Player(frame.id, {
-        events: {
-          onReady(event) {
-            player = event.target;
-            markReady(expectedGeneration);
-          },
-          onError(event) {
-            if (event.target !== player) return;
-            failPlayer();
-          },
-          onStateChange(event) {
-            if (event.target !== player || !ready) return;
-            try {
-              const currentTime = event.target.getCurrentTime();
-              if (event.data === core.PLAYER_STATES.PLAYING) {
-                watchBoundary(currentTime);
-              } else {
-                stopBoundaryWatcher();
-              }
-              emit("state", {
-                state: event.data,
-                currentTime,
-              });
-            } catch {
-              failPlayer();
-            }
-          },
-        },
-      });
+      // LingQ creates this iframe with its own YT.Player. The embed completes its
+      // handshake with one player per iframe, so a second one either never gets
+      // its methods or takes them from LingQ's. YT.get is undocumented.
+      player =
+        (typeof YT.get === "function" && YT.get(frame.id)) ||
+        new YT.Player(frame.id);
+      // YT players can't remove a listener by reference, so subscribe each one
+      // once; the handlers ignore events from any player but the current one.
+      if (!subscribed.has(player)) {
+        subscribed.add(player);
+        player.addEventListener("onReady", onReady);
+        player.addEventListener("onError", onError);
+        player.addEventListener("onStateChange", onStateChange);
+      }
       waitForPlayer(expectedGeneration);
     } catch {
       if (attempts > 0) {
