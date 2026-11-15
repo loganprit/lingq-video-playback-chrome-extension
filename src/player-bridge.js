@@ -110,6 +110,32 @@
     }
   }
 
+  function onReady(event) {
+    if (event.target === player) markReady(generation);
+  }
+
+  function onError(event) {
+    if (event.target === player) failPlayer();
+  }
+
+  function onStateChange(event) {
+    if (event.target !== player || !ready) return;
+    try {
+      const currentTime = event.target.getCurrentTime();
+      if (event.data === core.PLAYER_STATES.PLAYING) {
+        watchBoundary(currentTime);
+      } else {
+        stopBoundaryWatcher();
+      }
+      emit("state", {
+        state: event.data,
+        currentTime,
+      });
+    } catch {
+      failPlayer();
+    }
+  }
+
   function attach(expectedGeneration, attempts = 400) {
     if (expectedGeneration !== generation) return;
     if (!globalThis.YT?.Player) {
@@ -122,35 +148,15 @@
     }
 
     try {
-      player = new YT.Player(frame.id, {
-        events: {
-          onReady(event) {
-            player = event.target;
-            markReady(expectedGeneration);
-          },
-          onError(event) {
-            if (event.target !== player) return;
-            failPlayer();
-          },
-          onStateChange(event) {
-            if (event.target !== player || !ready) return;
-            try {
-              const currentTime = event.target.getCurrentTime();
-              if (event.data === core.PLAYER_STATES.PLAYING) {
-                watchBoundary(currentTime);
-              } else {
-                stopBoundaryWatcher();
-              }
-              emit("state", {
-                state: event.data,
-                currentTime,
-              });
-            } catch {
-              failPlayer();
-            }
-          },
-        },
-      });
+      // LingQ creates this iframe with its own YT.Player. The embed completes its
+      // handshake with one player per iframe, so a second one either never gets
+      // its methods or takes them from LingQ's. YT.get is undocumented.
+      player =
+        (typeof YT.get === "function" && YT.get(frame.id)) ||
+        new YT.Player(frame.id);
+      player.addEventListener("onReady", onReady);
+      player.addEventListener("onError", onError);
+      player.addEventListener("onStateChange", onStateChange);
       waitForPlayer(expectedGeneration);
     } catch {
       if (attempts > 0) {
@@ -179,6 +185,10 @@
     }
 
     stopBoundaryWatcher();
+    // The player may be LingQ's and outlive this binding, so drop our listeners.
+    player?.removeEventListener?.("onReady", onReady);
+    player?.removeEventListener?.("onError", onError);
+    player?.removeEventListener?.("onStateChange", onStateChange);
     activeSegment = null;
     frame = found;
     player = null;
