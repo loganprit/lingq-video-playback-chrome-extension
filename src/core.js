@@ -161,14 +161,17 @@
     return ["pause", "continue", "repeat"].includes(value) ? value : "pause";
   }
 
+  // Readiness is only announced. The other states ask the reader to wait or act.
+  const COMPANION_STATUSES = Object.freeze({
+    loading: { message: "Preparing video…", visible: true },
+    ready: { message: "Video ready.", visible: false },
+    paused: { message: "Playback paused. Press Play in the video to continue.", visible: true },
+    failed: { message: "Video unavailable. Reload this page to retry.", visible: true },
+    unsupported: { message: "This video isn’t supported in Sentence View.", visible: true },
+  });
+
   function companionStatus(value) {
-    return {
-      loading: "Preparing video…",
-      ready: "Video ready.",
-      paused: "Playback paused. Press Play in the video to continue.",
-      failed: "Video unavailable. Reload this page to retry.",
-      unsupported: "This video isn’t supported in Sentence View.",
-    }[value] || null;
+    return Object.hasOwn(COMPANION_STATUSES, value) ? COMPANION_STATUSES[value] : null;
   }
 
   function boundaryAction(mode, hasNext) {
@@ -186,11 +189,13 @@
 
   function shortcutAction(value) {
     // LingQ answers Space on a focused button or link by playing its lesson audio,
-    // so only the letter keys yield to a focused control.
+    // so only the letter keys yield to a focused control. The companion's own
+    // Playback Mode menu handles every key itself.
     if (
       !value ||
       value.modified ||
       value.editable ||
+      value.menu ||
       (value.interactive && value.key !== "Space")
     ) {
       return null;
@@ -217,6 +222,29 @@
     event.preventDefault();
     event.stopImmediatePropagation();
     return action;
+  }
+
+  function menuKey(event, index, count) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return null;
+    switch (event.key) {
+      case "ArrowDown":
+        return { type: "focus", index: (index + 1) % count };
+      case "ArrowUp":
+        return { type: "focus", index: (index + count - 1) % count };
+      case "Home":
+        return { type: "focus", index: 0 };
+      case "End":
+        return { type: "focus", index: count - 1 };
+      case "Enter":
+      case " ":
+        return event.repeat ? { type: "hold" } : { type: "choose", index };
+      case "Escape":
+        return { type: "close" };
+      case "Tab":
+        return { type: "leave" };
+      default:
+        return null;
+    }
   }
 
   function validGeneration(value) {
@@ -365,6 +393,7 @@
     initialCue,
     layoutAction,
     lifecycleAction,
+    menuKey,
     parseBridgeCommand,
     parseBridgeEvent,
     playbackMode,

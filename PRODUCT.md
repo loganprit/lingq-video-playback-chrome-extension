@@ -53,4 +53,4 @@ The companion is visually subordinate to LingQ. Its language is compact, literal
 
 ## Accessibility & Inclusion
 
-Playback controls use native buttons, visible focus, accessible selected-state semantics, keyboard-operable help, and status announcements. Page shortcuts must not hijack editable controls or YouTube iframe interaction.
+Playback controls use native buttons, visible focus, a keyboard-operable Playback Mode menu with selected-state semantics, and status announcements. Page shortcuts must not hijack editable controls or YouTube iframe interaction.

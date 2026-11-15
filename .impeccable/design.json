@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-16T00:00:00.000Z",
+  "generatedAt": "2026-11-14T00:00:00.000Z",
   "title": "Design System: LingQ Sentence Playback Companion",
   "extensions": {
     "colorMeta": {
@@ -8,26 +8,53 @@
         "role": "primary",
         "displayName": "Playback Violet",
         "canonical": "#5c5ce0"
+      },
+      "playback-violet-dark": {
+        "role": "primary",
+        "displayName": "Playback Violet (dark)",
+        "canonical": "#8f8ff0"
+      },
+      "menu-surface-dark": {
+        "role": "neutral",
+        "displayName": "Menu Surface (dark)",
+        "canonical": "#2d3238"
       }
     },
     "typographyMeta": {
-      "label": {
-        "displayName": "Compact Label",
-        "purpose": "Playback context, status, and tooltip guidance."
+      "footer-label": {
+        "displayName": "Footer Label",
+        "purpose": "Replay and Playback Mode labels, matching LingQ's footer buttons."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Menu heading, option descriptions, shortcuts, and status."
       }
     },
-    "shadows": [],
+    "shadows": [
+      {
+        "name": "menu",
+        "value": "0 8px 28px rgb(9 26 47 / 18%), 0 0 0 1px rgb(127 127 127 / 18%)"
+      },
+      {
+        "name": "menu-dark",
+        "value": "0 8px 28px rgb(0 0 0 / 45%), 0 0 0 1px rgb(255 255 255 / 8%)"
+      }
+    ],
     "motion": [
       {
-        "name": "tooltip-reveal",
-        "value": "120ms ease",
-        "purpose": "Reveal shortcut guidance without delaying operation."
+        "name": "menu-reveal",
+        "value": "120ms ease-out",
+        "purpose": "Open the Playback Mode menu without delaying operation."
       }
     ],
     "breakpoints": [
       {
-        "name": "narrow-reader",
-        "value": "44rem"
+        "name": "lingq-compact-labels",
+        "value": "849px"
+      },
+      {
+        "name": "narrow-footer",
+        "value": "639px"
       },
       {
         "name": "short-window",
@@ -37,19 +64,20 @@
   },
   "components": [
     {
-      "name": "Playback Mode",
+      "name": "Footer Item",
       "kind": "button",
-      "refersTo": "playback-mode",
-      "description": "A native-sized mode action with an explicit selected state.",
-      "html": "<button class=\"ds-playback-mode\" aria-pressed=\"true\">Pause</button>",
-      "css": ".ds-playback-mode { min-width: 44px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 7px; background: #5c5ce0; color: #fff; font: inherit; font-weight: 600; cursor: pointer; } .ds-playback-mode:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }"
+      "refersTo": "footer-item",
+      "description": "A LingQ-style footer action: a line icon over a label, no box.",
+      "html": "<button class=\"ds-footer-item\"><svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\"></svg><span>Replay</span></button>",
+      "css": ".ds-footer-item { display: inline-grid; grid-template-rows: 1fr 1fr; place-items: center; min-width: 64px; min-height: 44px; padding: 6px 12px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; font-size: 0.875rem; line-height: 21px; cursor: pointer; } .ds-footer-item:hover { background: rgb(127 127 127 / 10%); } .ds-footer-item:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }"
     },
     {
-      "name": "Shortcut Help",
-      "kind": "button",
-      "description": "A circular keyboard-accessible help affordance.",
-      "html": "<button class=\"ds-shortcut-help\" aria-label=\"Keyboard shortcuts\">?</button>",
-      "css": ".ds-shortcut-help { width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; } .ds-shortcut-help:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }"
+      "name": "Playback Mode Menu",
+      "kind": "menu",
+      "refersTo": "playback-mode-menu",
+      "description": "An elevated menu of Pause, Continue, and Repeat with a check on the current Playback Mode.",
+      "html": "<div class=\"ds-menu\" role=\"menu\"><button role=\"menuitemradio\" aria-checked=\"true\">Pause</button></div>",
+      "css": ".ds-menu { width: 20rem; padding: 6px; border-radius: 12px; background: Canvas; color: CanvasText; box-shadow: 0 8px 28px rgb(9 26 47 / 18%), 0 0 0 1px rgb(127 127 127 / 18%); } .ds-menu [aria-checked=\"true\"] { background: color-mix(in srgb, #5c5ce0 12%, transparent); }"
     }
   ],
   "narrative": {
@@ -57,19 +85,19 @@
     "overview": "A restrained and precise control layer that supports LingQ's live lesson without competing with it.",
     "keyCharacteristics": [
       "Video-first composition",
-      "Compact native controls",
+      "LingQ-native footer items",
       "One selected-state accent",
       "Responsive desktop reflow"
     ],
     "rules": [
       {
         "name": "The One Accent Rule",
-        "body": "Playback Violet communicates selected extension state only.",
+        "body": "Playback Violet marks the selected Playback Mode in the menu only.",
         "section": "colors"
       },
       {
         "name": "The Flat-by-Default Rule",
-        "body": "Use tonal contrast instead of decorative depth.",
+        "body": "In-flow controls stay flat. Only a temporary overlapping surface, the Playback Mode menu, is elevated.",
         "section": "elevation"
       }
     ],

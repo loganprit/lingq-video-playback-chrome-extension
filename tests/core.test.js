@@ -165,22 +165,29 @@ test("normalizes persisted Playback Modes to Pause", () => {
   assert.equal(core.playbackMode(), "pause");
 });
 
-test("describes each visible companion readiness state", () => {
-  assert.equal(core.companionStatus("loading"), "Preparing video…");
-  assert.equal(core.companionStatus("ready"), "Video ready.");
-  assert.equal(
-    core.companionStatus("paused"),
-    "Playback paused. Press Play in the video to continue.",
-  );
-  assert.equal(
-    core.companionStatus("failed"),
-    "Video unavailable. Reload this page to retry.",
-  );
-  assert.equal(
-    core.companionStatus("unsupported"),
-    "This video isn’t supported in Sentence View.",
-  );
+test("shows a companion status only when it needs the reader", () => {
+  assert.deepEqual(core.companionStatus("loading"), {
+    message: "Preparing video…",
+    visible: true,
+  });
+  assert.deepEqual(core.companionStatus("ready"), {
+    message: "Video ready.",
+    visible: false,
+  });
+  assert.deepEqual(core.companionStatus("paused"), {
+    message: "Playback paused. Press Play in the video to continue.",
+    visible: true,
+  });
+  assert.deepEqual(core.companionStatus("failed"), {
+    message: "Video unavailable. Reload this page to retry.",
+    visible: true,
+  });
+  assert.deepEqual(core.companionStatus("unsupported"), {
+    message: "This video isn’t supported in Sentence View.",
+    visible: true,
+  });
   assert.equal(core.companionStatus(), null);
+  assert.equal(core.companionStatus("toString"), null);
 });
 
 test("chooses each Sentence Boundary reaction without wrapping", () => {
@@ -294,6 +301,42 @@ test("leaves a Space press in a text field to the page", () => {
     claimed: [false, false, false],
     lingqAudioToggles: 3,
   });
+});
+
+test("leaves a Space press in the Playback Mode menu to the menu", () => {
+  assert.deepEqual(holdSpace({ editable: false, interactive: true, menu: true }), {
+    actions: [],
+    claimed: [false, false, false],
+    lingqAudioToggles: 3,
+  });
+  for (const key of ["N", "P", "R"]) {
+    assert.equal(core.shortcutAction({ key, menu: true, interactive: true }), null);
+  }
+});
+
+test("moves through the Playback Mode menu with wrapping arrows and Home/End", () => {
+  const key = (name, index) => core.menuKey({ key: name }, index, 3);
+
+  assert.deepEqual(key("ArrowDown", 0), { type: "focus", index: 1 });
+  assert.deepEqual(key("ArrowDown", 2), { type: "focus", index: 0 });
+  assert.deepEqual(key("ArrowUp", 0), { type: "focus", index: 2 });
+  assert.deepEqual(key("ArrowUp", 2), { type: "focus", index: 1 });
+  assert.deepEqual(key("Home", 2), { type: "focus", index: 0 });
+  assert.deepEqual(key("End", 0), { type: "focus", index: 2 });
+});
+
+test("chooses, closes, or leaves the Playback Mode menu from the keyboard", () => {
+  assert.deepEqual(core.menuKey({ key: "Enter" }, 1, 3), { type: "choose", index: 1 });
+  assert.deepEqual(core.menuKey({ key: " " }, 2, 3), { type: "choose", index: 2 });
+  assert.deepEqual(core.menuKey({ key: " ", repeat: true }, 2, 3), { type: "hold" });
+  assert.deepEqual(core.menuKey({ key: "Enter", repeat: true }, 2, 3), { type: "hold" });
+  assert.deepEqual(core.menuKey({ key: "Escape" }, 0, 3), { type: "close" });
+  assert.deepEqual(core.menuKey({ key: "Tab" }, 0, 3), { type: "leave" });
+  assert.deepEqual(core.menuKey({ key: "Tab", shiftKey: true }, 0, 3), { type: "leave" });
+  for (const modifier of ["altKey", "ctrlKey", "metaKey"]) {
+    assert.equal(core.menuKey({ key: "ArrowDown", [modifier]: true }, 0, 3), null);
+  }
+  assert.equal(core.menuKey({ key: "n" }, 0, 3), null);
 });
 
 test("claims the previous-Sentence key in the same cases as Next", () => {

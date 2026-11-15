@@ -120,8 +120,8 @@
   }
 
   function setStatus(kind, footer = state.layout?.footer) {
-    const message = core.companionStatus(kind);
-    if (!footer || !message) return;
+    const status = core.companionStatus(kind);
+    if (!footer || !status) return;
     if (state.statusControl?.parentNode !== footer) {
       state.statusControl?.remove();
       state.statusControl = document.createElement("span");
@@ -133,20 +133,187 @@
       state.statusKind = null;
     }
     if (state.statusKind === kind) return;
-    state.statusControl.textContent = message;
+    state.statusControl.textContent = status.message;
+    state.statusControl.classList.toggle("lspc-quiet", !status.visible);
     state.statusKind = kind;
   }
 
+  const MODES = [
+    {
+      mode: "pause",
+      name: "Pause",
+      label: "Pause at end",
+      description: "Stop so you can study the sentence",
+      icon: ["M2.5 12h10", "M16 6.5v11", "M20.5 6.5v11"],
+    },
+    {
+      mode: "continue",
+      name: "Continue",
+      label: "Continue at end",
+      description: "Keep playing into the next sentence",
+      icon: ["M3 12h15", "M14 7l5 5-5 5"],
+    },
+    {
+      mode: "repeat",
+      name: "Repeat",
+      label: "Repeat at end",
+      description: "Loop the sentence until you move on",
+      icon: [
+        "M17 3l3 3-3 3",
+        "M4 11V9a3 3 0 0 1 3-3h13",
+        "M7 21l-3-3 3-3",
+        "M20 13v2a3 3 0 0 1-3 3H4",
+      ],
+    },
+  ];
+  const ICONS = {
+    replay: ["M4 12a8 8 0 1 0 2.6-5.9", "M4 4v4.5h4.5", "M10.5 9.2v5.6l4.4-2.8z"],
+    chevron: ["M6 9l6 6 6-6"],
+    check: ["M5 12.5l4.5 4.5L19 7.5"],
+  };
+  const SHORTCUTS = [
+    [["Space"], "play/pause"],
+    [["P", "N"], "prev/next"],
+    [["R"], "replay"],
+  ];
+
+  function element(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  function icon(paths, className = "lspc-icon") {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", className);
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    for (const d of paths) {
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", d);
+      svg.append(path);
+    }
+    return svg;
+  }
+
   function renderMode() {
-    for (const button of state.modeControl?.querySelectorAll("button[data-mode]") || []) {
-      button.setAttribute("aria-pressed", String(button.dataset.mode === state.mode));
+    const control = state.modeControl;
+    if (!control) return;
+    const current = MODES.find(({ mode }) => mode === state.mode);
+    control
+      .querySelector(".lspc-mode-button")
+      .setAttribute("aria-label", `Playback Mode: ${current.label}`);
+    for (const node of control.querySelectorAll("[data-mode]")) {
+      const selected = node.dataset.mode === state.mode;
+      if (node.getAttribute("role") === "menuitemradio") {
+        node.setAttribute("aria-checked", String(selected));
+      } else {
+        node.classList.toggle("lspc-current", selected);
+      }
     }
   }
 
-  // A focused button keeps the letter shortcuts for itself, so a mouse click
+  // A focused control keeps the letter shortcuts for itself, so a mouse click
   // gives focus back to the page. Keyboard activation (detail 0) keeps it.
   function releasePointerFocus(event) {
-    if (event.detail > 0) event.currentTarget.blur();
+    if (event.detail > 0) document.activeElement?.blur();
+  }
+
+  function menuItems() {
+    return [...(state.modeControl?.querySelectorAll("[role='menuitemradio']") || [])];
+  }
+
+  function setMenuOpen(open) {
+    const control = state.modeControl;
+    if (!control) return;
+    control.querySelector(".lspc-popover").hidden = !open;
+    control.querySelector(".lspc-mode-button").setAttribute("aria-expanded", String(open));
+    if (open) menuItems().find((item) => item.dataset.mode === state.mode)?.focus();
+  }
+
+  function closeMenu(focusButton) {
+    setMenuOpen(false);
+    if (focusButton) state.modeControl?.querySelector(".lspc-mode-button").focus();
+  }
+
+  function chooseMode(mode) {
+    state.mode = mode;
+    renderMode();
+    void chrome.storage.local.set({ [STORAGE_KEY]: mode });
+  }
+
+  function handleMenuKey(event) {
+    const items = menuItems();
+    const index = items.indexOf(event.target);
+    const action = index < 0 ? null : core.menuKey(event, index, items.length);
+    if (!action || action.type === "leave") {
+      if (action && event.type === "keydown") closeMenu(true);
+      return;
+    }
+    // Every other menu key stays in the menu, so LingQ never sees it.
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.type !== "keydown") return;
+    if (action.type === "focus") items[action.index].focus();
+    else if (action.type === "close") closeMenu(true);
+    else if (action.type === "choose") {
+      chooseMode(items[action.index].dataset.mode);
+      closeMenu(true);
+    }
+  }
+
+  function modeMenu() {
+    const popover = element("div", "lspc-popover");
+    popover.hidden = true;
+    // Clicks on the menu's text keep focus in the menu, so it stays open.
+    popover.addEventListener("mousedown", (event) => event.preventDefault());
+    const heading = element("div", "lspc-menu-heading", "At the end of each sentence");
+    heading.id = "lspc-mode-menu-heading";
+    const menu = element("div", "lspc-menu");
+    menu.id = "lspc-mode-menu";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-labelledby", heading.id);
+    menu.addEventListener("keydown", handleMenuKey);
+    menu.addEventListener("keyup", handleMenuKey);
+    for (const { mode, name, description, icon: paths } of MODES) {
+      const item = element("button", "lspc-menu-item");
+      item.type = "button";
+      item.tabIndex = -1;
+      item.dataset.mode = mode;
+      item.setAttribute("role", "menuitemradio");
+      item.setAttribute("aria-labelledby", `lspc-mode-${mode}-name`);
+      item.setAttribute("aria-describedby", `lspc-mode-${mode}-description`);
+      const text = element("span", "lspc-menu-text");
+      const title = element("span", "lspc-menu-name", name);
+      title.id = `lspc-mode-${mode}-name`;
+      const detail = element("span", "lspc-menu-description", description);
+      detail.id = `lspc-mode-${mode}-description`;
+      text.append(title, detail);
+      item.append(icon(paths), text, icon(ICONS.check, "lspc-icon lspc-check"));
+      item.addEventListener("click", (event) => {
+        chooseMode(mode);
+        closeMenu(event.detail === 0);
+        releasePointerFocus(event);
+      });
+      menu.append(item);
+    }
+    const shortcuts = element("p", "lspc-menu-shortcuts");
+    SHORTCUTS.forEach(([keys, action], index) => {
+      if (index) shortcuts.append(" · ");
+      for (const key of keys) shortcuts.append(element("kbd", "", key), " ");
+      shortcuts.append(action);
+    });
+    popover.append(heading, menu, shortcuts);
+    return popover;
+  }
+
+  function footerItem(paths, label) {
+    const button = element("button", "lspc-item");
+    button.type = "button";
+    button.append(icon(paths), element("span", "lspc-item-label", label));
+    return button;
   }
 
   function mountModeControl() {
@@ -155,64 +322,50 @@
     if (state.modeControl?.parentNode === footer) return;
 
     state.modeControl?.remove();
-    const control = document.createElement("div");
-    control.className = "lspc-modes";
-    const modes = document.createElement("div");
-    modes.className = "lspc-mode-group";
-    modes.setAttribute("role", "group");
-    modes.setAttribute("aria-label", "Playback Mode at the next Sentence Boundary");
-    const label = document.createElement("span");
-    label.className = "lspc-mode-label";
-    label.textContent = "At next Sentence Boundary";
-    modes.append(label);
-    for (const mode of ["pause", "continue", "repeat"]) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.dataset.mode = mode;
-      button.textContent = mode[0].toUpperCase() + mode.slice(1);
-      button.addEventListener("click", (event) => {
-        releasePointerFocus(event);
-        state.mode = mode;
-        renderMode();
-        void chrome.storage.local.set({ [STORAGE_KEY]: mode });
-      });
-      modes.append(button);
-    }
-    control.append(modes);
-    const replay = document.createElement("span");
-    replay.className = "lspc-tip lspc-replay";
-    const replayButton = document.createElement("button");
-    replayButton.type = "button";
-    replayButton.textContent = "Replay Now";
-    replayButton.setAttribute("aria-describedby", "lspc-replay-tooltip");
-    replayButton.setAttribute("aria-keyshortcuts", "R");
-    replayButton.addEventListener("click", (event) => {
+    const control = element("div", "lspc-controls");
+    const replay = footerItem(ICONS.replay, "Replay");
+    replay.setAttribute("aria-label", "Replay Now");
+    replay.setAttribute("aria-keyshortcuts", "R");
+    replay.addEventListener("click", (event) => {
       releasePointerFocus(event);
       replayNow();
     });
-    const replayTooltip = document.createElement("span");
-    replayTooltip.id = "lspc-replay-tooltip";
-    replayTooltip.className = "lspc-tooltip";
-    replayTooltip.setAttribute("role", "tooltip");
-    replayTooltip.textContent = "Shortcut: R";
-    replay.append(replayButton, replayTooltip);
-    control.append(replay);
-    const help = document.createElement("span");
-    help.className = "lspc-tip";
-    const helpButton = document.createElement("button");
-    helpButton.type = "button";
-    helpButton.className = "lspc-shortcuts-button";
-    helpButton.addEventListener("click", releasePointerFocus);
-    helpButton.setAttribute("aria-label", "Keyboard shortcuts");
-    helpButton.setAttribute("aria-describedby", "lspc-shortcuts-tooltip");
-    helpButton.textContent = "?";
-    const tooltip = document.createElement("span");
-    tooltip.id = "lspc-shortcuts-tooltip";
-    tooltip.className = "lspc-tooltip";
-    tooltip.setAttribute("role", "tooltip");
-    tooltip.textContent = "Space: Play or pause · P: Previous · N: Next · R: Replay Now";
-    help.append(helpButton, tooltip);
-    control.append(help);
+
+    const modeButton = element("button", "lspc-item lspc-mode-button");
+    modeButton.type = "button";
+    modeButton.setAttribute("aria-haspopup", "menu");
+    modeButton.setAttribute("aria-expanded", "false");
+    modeButton.setAttribute("aria-controls", "lspc-mode-menu");
+    const glyphs = element("span", "lspc-stack");
+    const labels = element("span", "lspc-stack");
+    for (const { mode, label, icon: paths } of MODES) {
+      const glyph = icon(paths);
+      glyph.dataset.mode = mode;
+      glyphs.append(glyph);
+      const text = element("span", "lspc-item-label", label);
+      text.dataset.mode = mode;
+      text.append(icon(ICONS.chevron, "lspc-icon lspc-chevron"));
+      labels.append(text);
+    }
+    modeButton.append(glyphs, labels);
+    modeButton.addEventListener("click", (event) => {
+      const open = modeButton.getAttribute("aria-expanded") !== "true";
+      setMenuOpen(open);
+      if (!open) releasePointerFocus(event);
+    });
+    modeButton.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setMenuOpen(true);
+    });
+
+    const picker = element("div", "lspc-mode-picker");
+    picker.append(modeButton, modeMenu());
+    picker.addEventListener("focusout", (event) => {
+      if (!picker.contains(event.relatedTarget)) setMenuOpen(false);
+    });
+    control.append(replay, element("span", "lspc-divider"), picker);
     footer.append(control);
     state.modeControl = control;
     renderMode();
@@ -486,7 +639,8 @@
         "[role='option'], [role='tab']",
     );
     const interactive = Boolean(interactiveTarget?.getClientRects().length);
-    return { editable, interactive };
+    const menu = Boolean(target?.closest?.(".lspc-menu"));
+    return { editable, interactive, menu };
   }
 
   function scheduleSync() {
