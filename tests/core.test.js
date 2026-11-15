@@ -325,7 +325,7 @@ test("accepts only current-generation player events", () => {
 
   assert.deepEqual(core.parseBridgeEvent(ready, 4), ready);
   assert.deepEqual(core.parseBridgeEvent(blocked, 4), blocked);
-  assert.deepEqual(Object.keys(blocked).includes("detail"), false);
+  assert.equal("detail" in blocked, false);
   assert.deepEqual(core.parseBridgeEvent(state, 4), state);
   assert.deepEqual(core.parseBridgeEvent(error, 4), error);
   assert.equal(core.parseBridgeEvent(ready, 5), null);

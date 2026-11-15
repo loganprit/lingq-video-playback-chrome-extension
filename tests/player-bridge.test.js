@@ -193,16 +193,19 @@ test("binds a new frame after LingQ destroys the previous player", () => {
   ]);
 });
 
-test("reports a play the browser blocked", () => {
-  const existing = fakePlayer({ ready: true });
-  const bridge = loadBridge({ existing });
+test("reports a play the browser blocked on the current ready player", () => {
+  const first = fakePlayer({ ready: false });
+  const second = fakePlayer({ ready: true });
+  const bridge = loadBridge({ frames: { widget2: first, widget7: second } });
 
-  existing.fire("onAutoplayBlocked");
-  bridge.bind(1);
-  existing.fire("onAutoplayBlocked");
+  bridge.bind(1, "widget2");
+  first.fire("onAutoplayBlocked");
+  bridge.bind(2, "widget7");
+  first.fire("onAutoplayBlocked");
+  second.fire("onAutoplayBlocked");
 
   assert.deepEqual(bridge.events, [
-    core.bridgeEvent("ready", 1),
-    core.bridgeEvent("blocked", 1),
+    core.bridgeEvent("ready", 2),
+    core.bridgeEvent("blocked", 2),
   ]);
 });
