@@ -297,7 +297,7 @@
     ];
     if (
       !validGeneration(generation) ||
-      !["ready", "state", "error"].includes(type)
+      !["ready", "state", "blocked", "error"].includes(type)
     ) {
       return null;
     }

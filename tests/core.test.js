@@ -321,8 +321,11 @@ test("accepts only current-generation player events", () => {
   const ready = core.bridgeEvent("ready", 4);
   const state = core.bridgeEvent("state", 4, { state: 1, currentTime: 0.7 });
   const error = core.bridgeEvent("error", 4, { reason: "player-unavailable" });
+  const blocked = core.bridgeEvent("blocked", 4);
 
   assert.deepEqual(core.parseBridgeEvent(ready, 4), ready);
+  assert.deepEqual(core.parseBridgeEvent(blocked, 4), blocked);
+  assert.deepEqual(Object.keys(blocked).includes("detail"), false);
   assert.deepEqual(core.parseBridgeEvent(state, 4), state);
   assert.deepEqual(core.parseBridgeEvent(error, 4), error);
   assert.equal(core.parseBridgeEvent(ready, 5), null);
