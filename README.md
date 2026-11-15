@@ -11,7 +11,7 @@ On a supported YouTube-backed LingQ lesson in **Sentence View**, the extension:
 - keeps LingQ's real interactive Sentence and translation controls beneath it;
 - plays adjacent Sentences immediately through LingQ's native Previous and Next controls.
 
-The extension drives only the visible player through the documented YouTube IFrame Player API. It does not use LingQ's hidden Sentence player or replace LingQ's reader and vocabulary UI.
+The extension drives only the visible player, mainly through the YouTube IFrame Player API (see Scope and maintenance for the undocumented messages it also relies on). It does not use LingQ's hidden Sentence player or replace LingQ's reader and vocabulary UI.
 
 ## Footer controls
 
