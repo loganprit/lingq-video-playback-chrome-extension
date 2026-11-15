@@ -332,6 +332,29 @@
   .lspc-label-text {
     display: none;
   }
+
+  /* The hidden label returns as a hover caption. Generated content isn't part
+     of the accessible name or description, so screen readers hear the
+     aria-label once, unlike with a title attribute. */
+  .lspc-item {
+    position: relative;
+  }
+
+  .lspc-item:is(:hover, :focus-visible):not([aria-expanded="true"])::after {
+    content: attr(data-tip);
+    position: absolute;
+    z-index: 20;
+    right: 0;
+    bottom: calc(100% + 6px);
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--lspc-surface);
+    color: var(--lspc-on-surface);
+    box-shadow: var(--lspc-elevation);
+    font-size: 0.75rem;
+    white-space: nowrap;
+    pointer-events: none;
+  }
 }
 
 @media (max-height: 41.25rem) {

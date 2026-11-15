@@ -203,9 +203,9 @@
     const control = state.modeControl;
     if (!control) return;
     const current = MODES.find(({ mode }) => mode === state.mode);
-    control
-      .querySelector(".lspc-mode-button")
-      .setAttribute("aria-label", `Playback Mode: ${current.label}`);
+    const button = control.querySelector(".lspc-mode-button");
+    button.setAttribute("aria-label", `Playback Mode: ${current.label}`);
+    button.dataset.tip = current.label;
     for (const node of control.querySelectorAll("[data-mode]")) {
       const selected = node.dataset.mode === state.mode;
       if (node.getAttribute("role") === "menuitemradio") {
@@ -328,6 +328,7 @@
     const control = element("div", "lspc-controls");
     const replay = footerItem(ICONS.replay, "Replay");
     replay.setAttribute("aria-label", "Replay Now");
+    replay.dataset.tip = "Replay Now";
     replay.setAttribute("aria-keyshortcuts", "R");
     replay.addEventListener("click", (event) => {
       releasePointerFocus(event);
