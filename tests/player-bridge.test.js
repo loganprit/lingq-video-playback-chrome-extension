@@ -18,8 +18,12 @@ function fakePlayer({ ready }) {
     addEventListener(type, listener) {
       (listeners[type] ||= []).push(listener);
     },
-    removeEventListener(type, listener) {
-      listeners[type] = (listeners[type] || []).filter((l) => l !== listener);
+    // Real YT players have no working removeEventListener, and their command
+    // proxies throw once the player is destroyed.
+    destroy() {
+      player.removeEventListener = player.pauseVideo = () => {
+        throw new TypeError("Cannot read properties of null (reading 'src')");
+      };
     },
     becomeReady() {
       Object.assign(player, {
@@ -38,11 +42,9 @@ function fakePlayer({ ready }) {
 }
 
 function loadBridge({ existing, get = true, frames = { widget2: existing } }) {
-  const frameFor = (id) => ({
-    id,
-    src: `https://www.youtube.com/embed/VQMZfw9CYaM?enablejsapi=1&origin=${encodeURIComponent(ORIGIN)}`,
-    closest: () => null,
-  });
+  const src = "https://www.youtube.com/embed/VQMZfw9CYaM?enablejsapi=1&origin=" +
+    encodeURIComponent(ORIGIN);
+  const frameFor = (id) => ({ id, src, closest: () => null });
   const frameObjects = Object.fromEntries(Object.keys(frames).map((id) => [id, frameFor(id)]));
   let current = frameObjects[Object.keys(frames)[0]];
   const constructed = [];
@@ -153,7 +155,7 @@ test("creates a player only for a frame that has none", () => {
   }
 });
 
-test("stops listening to a player after binding another frame", () => {
+test("reports each state once after returning to an earlier frame", () => {
   const first = fakePlayer({ ready: true });
   const second = fakePlayer({ ready: true });
   const bridge = loadBridge({ frames: { widget2: first, widget7: second } });
@@ -173,4 +175,20 @@ test("stops listening to a player after binding another frame", () => {
       }),
     ],
   );
+});
+
+test("binds a new frame after LingQ destroys the previous player", () => {
+  const first = fakePlayer({ ready: true });
+  const second = fakePlayer({ ready: true });
+  const bridge = loadBridge({ frames: { widget2: first, widget7: second } });
+
+  bridge.bind(1, "widget2");
+  first.destroy();
+  bridge.bind(2, "widget7");
+
+  assert.equal(bridge.constructed.length, 0);
+  assert.deepEqual(bridge.events, [
+    core.bridgeEvent("ready", 1),
+    core.bridgeEvent("ready", 2),
+  ]);
 });

@@ -11,6 +11,7 @@
   let generation = 0;
   let player = null;
   let ready = false;
+  const subscribed = new WeakSet();
 
   function emit(type, detail) {
     const event = core.bridgeEvent(type, generation, detail);
@@ -154,9 +155,14 @@
       player =
         (typeof YT.get === "function" && YT.get(frame.id)) ||
         new YT.Player(frame.id);
-      player.addEventListener("onReady", onReady);
-      player.addEventListener("onError", onError);
-      player.addEventListener("onStateChange", onStateChange);
+      // YT players can't remove a listener by reference, so subscribe each one
+      // once; the handlers ignore events from any player but the current one.
+      if (!subscribed.has(player)) {
+        subscribed.add(player);
+        player.addEventListener("onReady", onReady);
+        player.addEventListener("onError", onError);
+        player.addEventListener("onStateChange", onStateChange);
+      }
       waitForPlayer(expectedGeneration);
     } catch {
       if (attempts > 0) {
@@ -185,10 +191,6 @@
     }
 
     stopBoundaryWatcher();
-    // The player may be LingQ's and outlive this binding, so drop our listeners.
-    player?.removeEventListener?.("onReady", onReady);
-    player?.removeEventListener?.("onError", onError);
-    player?.removeEventListener?.("onStateChange", onStateChange);
     activeSegment = null;
     frame = found;
     player = null;
