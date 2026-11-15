@@ -202,6 +202,7 @@
     const helpButton = document.createElement("button");
     helpButton.type = "button";
     helpButton.className = "lspc-shortcuts-button";
+    helpButton.addEventListener("click", releasePointerFocus);
     helpButton.setAttribute("aria-label", "Keyboard shortcuts");
     helpButton.setAttribute("aria-describedby", "lspc-shortcuts-tooltip");
     helpButton.textContent = "?";
