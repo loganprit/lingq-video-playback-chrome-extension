@@ -48,9 +48,12 @@ function fakePlayer({ ready }) {
 // has none.
 function fakeEmbed(widgetId, events) {
   const subscriptions = new Set(events);
+  const origins = [];
   return {
     subscriptions,
+    origins,
     postMessage(data, origin) {
+      origins.push(origin);
       const message = JSON.parse(data);
       if (
         origin === YOUTUBE &&
@@ -363,6 +366,10 @@ test("re-subscribes a reloaded embed under its own widget id and origin", () => 
 
   bridge.reload("widget2");
   bridge.announce("widget2", { origin: "https://www.youtube-nocookie.com" });
+  assert.deepEqual(
+    bridge.embed("widget2").origins,
+    Array(3).fill("https://www.youtube-nocookie.com"),
+  );
   assert.deepEqual(bridge.events, [
     core.bridgeEvent("ready", 1),
     core.bridgeEvent("ready", 1),
