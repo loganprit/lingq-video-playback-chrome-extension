@@ -137,6 +137,12 @@
     }
   }
 
+  function onAutoplayBlocked(event) {
+    if (event.target !== player || !ready) return;
+    stopBoundaryWatcher();
+    emit("blocked");
+  }
+
   function attach(expectedGeneration, attempts = 400) {
     if (expectedGeneration !== generation) return;
     if (!globalThis.YT?.Player) {
@@ -162,6 +168,7 @@
         player.addEventListener("onReady", onReady);
         player.addEventListener("onError", onError);
         player.addEventListener("onStateChange", onStateChange);
+        player.addEventListener("onAutoplayBlocked", onAutoplayBlocked);
       }
       waitForPlayer(expectedGeneration);
     } catch {

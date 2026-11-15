@@ -5,8 +5,12 @@
   if (!core || window !== window.top) return;
 
   const STORAGE_KEY = "playbackMode";
+  // A play request expires when no activation cue follows it. It outlasts the
+  // bridge's own waits: 20 s for the YouTube API and 20 s for the player.
+  const PLAY_REQUEST_MS = 45000;
 
   const state = {
+    autoplayBlocked: false,
     blockedFrame: null,
     boundaryArmed: false,
     cache: null,
@@ -23,6 +27,7 @@
     playbackQueue: [],
     playerState: core.PLAYER_STATES.UNSTARTED,
     playerTime: 0,
+    playRequest: null,
     ready: false,
     recoveryAttemptedLessonKey: null,
     revision: 0,
@@ -75,6 +80,9 @@
     if (state.frame) {
       postBridgeCommand(core.bridgeCommand("pause", state.generation));
       state.generation += 1;
+      // mount() also runs this reset on the way to the first bind, while the
+      // request still waits for its player, so only a bound player drops it.
+      state.playRequest = null;
     }
     if (layout) {
       layout.modal.classList.remove("lspc-player");
@@ -103,6 +111,7 @@
     state.boundaryArmed = false;
     state.ignoreResetUntil = 0;
     state.synchronizing = false;
+    state.autoplayBlocked = false;
     state.modeControl?.remove();
     state.modeControl = null;
     state.statusControl?.remove();
@@ -248,13 +257,19 @@
 
   function cuePending() {
     if (!state.ready || !state.pendingCue || state.pendingCue.key === state.cueKey) return;
-    if (state.pendingCue.play) state.synchronizing = true;
+    const type = core.cueCommand(
+      {
+        play: state.pendingCue.play,
+        activation: state.cueKey === null,
+        lessonKey: state.lessonKey,
+      },
+      state.playRequest,
+      Date.now(),
+    );
+    state.playRequest = null;
+    if (type === "seek-play") state.synchronizing = true;
     postBridgeCommand(
-      core.bridgeCommand(
-        state.pendingCue.play ? "seek-play" : "seek",
-        state.generation,
-        state.pendingCue.segment,
-      ),
+      core.bridgeCommand(type, state.generation, state.pendingCue.segment),
     );
     state.ignoreResetUntil = Date.now() + 1000;
     state.boundaryArmed = false;
@@ -462,8 +477,20 @@
       return;
     }
 
+    if (event.type === "blocked") {
+      // The browser refused to play, so the player never left its last state.
+      // Space should play, and the status should ask for Play (#7 story 40).
+      state.autoplayBlocked = true;
+      state.playerState = core.PLAYER_STATES.PAUSED;
+      state.playbackQueue = [];
+      state.boundaryArmed = false;
+      setStatus("paused");
+      return;
+    }
+
     if (event.type === "state") {
       state.playerTime = event.detail.currentTime;
+      if (event.detail.state === core.PLAYER_STATES.PLAYING) state.autoplayBlocked = false;
       const pendingPlayback = state.playbackQueue[0];
       if (!pendingPlayback || pendingPlayback.expectedState === event.detail.state) {
         state.playerState = event.detail.state;
@@ -473,10 +500,11 @@
         if (state.playbackQueue[0]) sendPlayback(state.playbackQueue[0].command);
       }
       if (
-        state.synchronizing &&
-        [core.PLAYER_STATES.PAUSED, core.PLAYER_STATES.CUED].includes(
-          event.detail.state,
-        )
+        state.autoplayBlocked ||
+        (state.synchronizing &&
+          [core.PLAYER_STATES.PAUSED, core.PLAYER_STATES.CUED].includes(
+            event.detail.state,
+          ))
       ) {
         setStatus("paused");
       } else if (state.ready) {
@@ -567,6 +595,19 @@
     (event) => {
       const direction = navigationDirection(event.target);
       if (direction) armNavigation(direction);
+      // The player-unavailable recovery clicks this button itself. Only the
+      // user's own click in Sentence View, before a player is bound, asks to watch.
+      if (
+        event.isTrusted &&
+        !state.frame &&
+        readerContext() &&
+        event.target?.closest?.("button")?.querySelector(".svg-icon--videoYT-s")
+      ) {
+        state.playRequest = {
+          lessonKey: core.readerLesson(location.pathname)?.key,
+          until: Date.now() + PLAY_REQUEST_MS,
+        };
+      }
       if (state.layout && event.target?.closest?.(".sentence-text .sentence-item")) {
         state.boundaryArmed = false;
         postBridgeCommand(core.bridgeCommand("pause", state.generation));
