@@ -5,10 +5,16 @@
   if (!core || globalThis.__lingqSentencePlayerBridge) return;
   globalThis.__lingqSentencePlayerBridge = true;
 
+  const EMBED_ORIGINS = ["https://www.youtube.com", "https://www.youtube-nocookie.com"];
+  const EMBED_EVENTS = ["onStateChange", "onError", "onAutoplayBlocked"];
+
   let activeSegment = null;
   let boundaryTimer = null;
   let frame = null;
   let generation = 0;
+  // The embed windows that have announced they are ready. It is null until the
+  // bridge reads a first announcement.
+  let liveEmbeds = null;
   let player = null;
   let ready = false;
   const subscribed = new WeakSet();
@@ -39,9 +45,19 @@
     emit("error", { reason: "player-error" });
   }
 
+  // Moving the iframe in the DOM reloads its embed into a new window, and the
+  // YT player keeps its methods meanwhile. Only the embed's own announcement
+  // shows that the frame's current window is listening. If the bridge never
+  // read an announcement, the player's methods decide alone.
+  function embedLive() {
+    return !liveEmbeds || liveEmbeds.has(frame.contentWindow);
+  }
+
   function playerReady() {
-    return ["getCurrentTime", "pauseVideo", "playVideo", "seekTo"].every(
-      (method) => typeof player?.[method] === "function",
+    return (
+      ["getCurrentTime", "pauseVideo", "playVideo", "seekTo"].every(
+        (method) => typeof player?.[method] === "function",
+      ) && embedLive()
     );
   }
 
@@ -143,6 +159,48 @@
     emit("blocked");
   }
 
+  // An embed posts {"event":"onReady","id":1,"channel":"widget"} each time it
+  // finishes loading. This is YouTube's widget protocol, which is undocumented.
+  function embedAnnounced(message) {
+    if (
+      !message.source ||
+      !EMBED_ORIGINS.includes(message.origin) ||
+      typeof message.data !== "string" ||
+      !message.data.includes('"onReady"')
+    ) {
+      return;
+    }
+    let announcement;
+    try {
+      announcement = JSON.parse(message.data);
+    } catch {
+      return;
+    }
+    if (announcement?.event !== "onReady" || announcement.channel !== "widget") return;
+
+    liveEmbeds ??= new WeakSet();
+    liveEmbeds.add(message.source);
+    if (message.source !== frame?.contentWindow) return;
+
+    // The YT player asks an embed for each event type once, so a reloaded embed
+    // reports no events to LingQ or to this bridge until it is asked again. An
+    // embed ignores a request for an event it already reports.
+    for (const type of EMBED_EVENTS) {
+      message.source.postMessage(
+        JSON.stringify({
+          event: "command",
+          func: "addEventListener",
+          args: [type],
+          id: announcement.id,
+          channel: "widget",
+        }),
+        message.origin,
+      );
+    }
+    ready = false;
+    markReady(generation);
+  }
+
   function attach(expectedGeneration, attempts = 400) {
     if (expectedGeneration !== generation) return;
     if (!globalThis.YT?.Player) {
@@ -189,6 +247,7 @@
     }
 
     if (found === frame && player) {
+      ready &&= playerReady();
       if (ready) {
         emit("ready");
       } else {
@@ -206,7 +265,11 @@
   }
 
   window.addEventListener("message", (message) => {
-    if (message.source !== window || message.origin !== location.origin) return;
+    if (message.source !== window) {
+      embedAnnounced(message);
+      return;
+    }
+    if (message.origin !== location.origin) return;
     const command = core.parseBridgeCommand(message.data);
     if (!command) return;
 
