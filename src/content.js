@@ -390,7 +390,7 @@
   }
 
   function mount({ reader, portal, footer, modal, container }) {
-    const next = { modal, portal, reader, footer };
+    const next = { modal, portal, reader, footer, container };
     const action = core.layoutAction(state.layout, next);
     if (
       action === "retain" &&

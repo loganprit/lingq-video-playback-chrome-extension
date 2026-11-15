@@ -11,7 +11,7 @@
 }
 
 .modal.video-player.lspc-player,
-.modal.video-player.lspc-player .modal-container,
+#sentence-video-player-portal.lspc-portal > .modal-container,
 .modal.video-player.lspc-player .modal-content {
   position: static !important;
   inset: auto !important;
@@ -341,11 +341,11 @@
   }
 
   .lspc-item:is(:hover, :focus-visible):not([aria-expanded="true"])::after {
-    content: attr(data-tip);
+    content: attr(data-tip) / "";
     position: absolute;
-    z-index: 20;
+    z-index: 21;
     right: 0;
-    bottom: calc(100% + 6px);
+    bottom: calc(100% + 8px);
     padding: 6px 10px;
     border-radius: 8px;
     background: var(--lspc-surface);
