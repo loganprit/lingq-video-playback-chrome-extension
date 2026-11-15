@@ -75,7 +75,7 @@ The system is intentionally narrow rather than a standalone brand world. Its vis
 - Footer items that look like LingQ's own: a line icon over a label, no box, LingQ's type.
 - One menu for the Playback Mode, with the shortcuts at its foot.
 - A single Playback Violet accent, used only for the selected Playback Mode in the menu.
-- Responsive reflow for narrow and short desktop windows.
+- Compact icon-only items for narrow footers, and a smaller player floor for short windows.
 
 ## Colors
 
@@ -113,15 +113,15 @@ LingQ marks its dark theme with `theme-luminosity-dark` on `body`. It keeps `is-
 
 ## Layout
 
-The 16:9 player is centered and sized from both reader width and available viewport height. The real LingQ sentence remains centered below it. The companion's footer items sit after LingQ's `section--last` and match its two equal rows for icon and label, so icons and label baselines line up with *Review Sentence*. Below LingQ's own 640px breakpoint, where its footer narrows to 480px, the companion takes a row above LingQ's footer controls. The reader's grid row and LingQ's sentence area both give back that row's 3.5rem, so nothing overlaps. Short windows reduce the player's floor at `41.25rem` viewport height so the complete study loop remains usable.
+The 16:9 player is centered and sized from both reader width and available viewport height. The real LingQ sentence remains centered below it. The companion's footer items sit after LingQ's `section--last` and match its two equal rows for icon and label, so icons and label baselines line up with *Review Sentence*. The companion always stays in LingQ's single footer row. LingQ's footer container is the size container: where its content box is under `37rem` (LingQ's 480px footer below a 640px viewport, or a 600px footer beside the word panel at about 1024px), the items drop their labels and keep 44px icon targets. Their accessible names are unchanged. Short windows reduce the player's floor at `41.25rem` viewport height so the complete study loop remains usable.
 
 Spacing uses a 4px item gap, a 24px player-to-sentence gap, and an 8px gap between the menu and its button.
 
 ## Elevation & Depth
 
-Footer items are flat: transparent at rest, with a tonal hover. The Playback Mode menu is the one elevated surface. It floats over the reader, so it carries a soft shadow plus a 1px hairline ring that keeps its edge crisp in dark.
+Footer items are flat: transparent at rest, with a tonal hover. The Playback Mode menu and the visible readiness status are the elevated surfaces. Both float over the reader, so they carry a soft shadow plus a 1px hairline ring that keeps their edges crisp in dark.
 
-**The Flat-by-Default Rule.** Do not add shadows, borders, or blur to in-flow controls. Only a temporary surface that overlaps other content, such as the Playback Mode menu, is elevated.
+**The Flat-by-Default Rule.** Do not add shadows, borders, or blur to in-flow controls. Only a temporary surface that overlaps other content, such as the Playback Mode menu or a visible status, is elevated.
 
 ## Shapes
 
@@ -149,9 +149,9 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 
 ### Readiness Status
 
-- **Style:** inherited color, `0.75rem`, reduced emphasis, right-aligned beside Replay. Below 640px it shares the companion's row.
+- **Style:** a `0.75rem` caption on the menu surface, with the menu's elevation and an 8px radius. It sits 8px above the right end of LingQ's footer, out of the layout flow, so it never moves or wraps the footer controls. It ignores the pointer, so it never blocks what is beneath it.
 - **Copy:** one concise state or recovery action, announced through a polite atomic live region.
-- **Visibility:** it shows only when the reader must wait or act: loading, press Play, failed, or unsupported. "Video ready." stays in the live region, visually hidden, so readiness is still announced without permanent footer text.
+- **Visibility:** it shows only when the reader must wait or act: loading, a play the browser refused (press Play), failed, or unsupported. The companion's own Pause at a Sentence Boundary is expected and shows nothing. "Video ready." stays in the live region, visually hidden, so readiness is still announced without permanent footer text.
 
 ## Do's and Don'ts
 

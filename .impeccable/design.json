@@ -53,8 +53,8 @@
         "value": "849px"
       },
       {
-        "name": "narrow-footer",
-        "value": "639px"
+        "name": "compact-footer-items",
+        "value": "footer content box under 37rem (container query)"
       },
       {
         "name": "short-window",
@@ -87,7 +87,7 @@
       "Video-first composition",
       "LingQ-native footer items",
       "One selected-state accent",
-      "Responsive desktop reflow"
+      "Compact footer items at narrow widths"
     ],
     "rules": [
       {
@@ -97,7 +97,7 @@
       },
       {
         "name": "The Flat-by-Default Rule",
-        "body": "In-flow controls stay flat. Only a temporary overlapping surface, the Playback Mode menu, is elevated.",
+        "body": "In-flow controls stay flat. Only temporary overlapping surfaces, the Playback Mode menu and a visible status, are elevated.",
         "section": "elevation"
       }
     ],

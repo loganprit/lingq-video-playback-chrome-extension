@@ -74,22 +74,28 @@
   max-width: 60rem;
 }
 
-.lspc-reader .main-footer .lesson-bottom {
-  flex-wrap: wrap;
+.main-footer .lesson-bottom:has(> .lspc-controls, > .lspc-status) {
+  position: relative;
+  container-type: inline-size;
 }
 
-.lspc-controls {
+.lspc-controls,
+.lspc-status {
   --lspc-accent: #5c5ce0;
   --lspc-surface: Canvas;
   --lspc-on-surface: CanvasText;
   --lspc-elevation: 0 8px 28px rgb(9 26 47 / 18%), 0 0 0 1px rgb(127 127 127 / 18%);
-  order: 2;
+}
+
+.lspc-controls {
   display: flex;
+  flex: none;
   align-items: stretch;
   gap: 4px;
 }
 
-.theme-luminosity-dark .lspc-controls {
+.theme-luminosity-dark .lspc-controls,
+.theme-luminosity-dark .lspc-status {
   --lspc-accent: #8f8ff0;
   --lspc-surface: #2d3238;
   --lspc-on-surface: #e8eaed;
@@ -278,15 +284,22 @@
   font-weight: 600;
 }
 
+/* A caption above the footer's end, out of flow, so a status never pushes
+   the footer controls out of view. */
 .lspc-status {
-  order: 1;
-  align-self: center;
-  max-width: 15rem;
-  margin-inline: 8px;
+  position: absolute;
+  z-index: 20;
+  right: 8px;
+  bottom: calc(100% + 8px);
+  max-width: min(18rem, calc(100% - 16px));
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--lspc-surface);
+  color: var(--lspc-on-surface);
+  box-shadow: var(--lspc-elevation);
   font-size: 0.75rem;
   line-height: 1.35;
-  text-align: end;
-  opacity: 0.72;
+  pointer-events: none;
 }
 
 .lspc-status.lspc-quiet {
@@ -306,36 +319,18 @@
   }
 }
 
-/* Below LingQ's 640px breakpoint its footer narrows to 480px, so the companion
-   takes its own 3.5rem row above LingQ's controls. LingQ sizes the sentence
-   area for a 4rem footer, so both give that row back. */
-@media (max-width: 639px) {
-  #sentence-video-player-portal.lspc-portal {
-    width: min(100%, max(20rem, calc((100dvh - 30rem) * 16 / 9)));
+/* Where LingQ's footer is too narrow for labels, the items keep their icons. */
+@container (width < 37rem) {
+  .lspc-item {
+    grid-template-rows: none;
+    grid-auto-flow: column;
+    column-gap: 2px;
+    min-width: 44px;
+    padding-inline: 8px;
   }
 
-  #lesson-reader.lspc-reader {
-    grid-template-rows: minmax(0, 1fr) auto;
-  }
-
-  #lesson-reader.lspc-reader .reader-component .sentence-text {
-    height: calc(var(--app-height, 100dvh) - 16.25rem);
-  }
-
-  .lspc-reader .main-footer .lesson-bottom::before {
-    content: "";
-    flex-basis: 100%;
-  }
-
-  .lspc-controls {
-    order: -1;
-    margin-inline: auto;
-  }
-
-  .lspc-status {
-    order: -2;
-    flex: 1 1 0;
-    max-width: none;
+  .lspc-label-text {
+    display: none;
   }
 }
 
@@ -343,11 +338,5 @@
   #sentence-video-player-portal.lspc-portal {
     width: min(100%, max(8rem, calc((100dvh - 20rem) * 16 / 9)));
     margin-inline: auto;
-  }
-}
-
-@media (max-width: 639px) and (max-height: 41.25rem) {
-  #sentence-video-player-portal.lspc-portal {
-    width: min(100%, max(8rem, calc((100dvh - 30rem) * 16 / 9)));
   }
 }

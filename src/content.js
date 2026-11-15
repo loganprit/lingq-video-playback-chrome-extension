@@ -35,6 +35,7 @@
     sentences: null,
     statusControl: null,
     statusKind: null,
+    // false, or the state ("play" or "pause") a sent command is settling into.
     synchronizing: false,
     timer: null,
     warnings: new Set(),
@@ -312,7 +313,9 @@
   function footerItem(paths, label) {
     const button = element("button", "lspc-item");
     button.type = "button";
-    button.append(icon(paths), element("span", "lspc-item-label", label));
+    const text = element("span", "lspc-item-label");
+    text.append(element("span", "lspc-label-text", label));
+    button.append(icon(paths), text);
     return button;
   }
 
@@ -342,9 +345,12 @@
       const glyph = icon(paths);
       glyph.dataset.mode = mode;
       glyphs.append(glyph);
-      const text = element("span", "lspc-item-label", label);
+      const text = element("span", "lspc-item-label");
       text.dataset.mode = mode;
-      text.append(icon(ICONS.chevron, "lspc-icon lspc-chevron"));
+      text.append(
+        element("span", "lspc-label-text", label),
+        icon(ICONS.chevron, "lspc-icon lspc-chevron"),
+      );
       labels.append(text);
     }
     modeButton.append(glyphs, labels);
@@ -353,12 +359,17 @@
       setMenuOpen(open);
       if (!open) releasePointerFocus(event);
     });
-    modeButton.addEventListener("keydown", (event) => {
-      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    // LingQ never sees Escape or Space here. Escape on the page crashes its
+    // reader, and Space would play its lesson audio.
+    const handleButtonKey = (event) => {
+      const action = core.menuButtonKey(event);
+      if (!action) return;
       event.preventDefault();
       event.stopPropagation();
-      setMenuOpen(true);
-    });
+      if (action === "open") setMenuOpen(true);
+    };
+    modeButton.addEventListener("keydown", handleButtonKey);
+    modeButton.addEventListener("keyup", handleButtonKey);
 
     const picker = element("div", "lspc-mode-picker");
     picker.append(modeButton, modeMenu());
@@ -449,7 +460,7 @@
       Date.now(),
     );
     state.playRequest = null;
-    if (type === "seek-play") state.synchronizing = true;
+    if (type === "seek-play") state.synchronizing = "play";
     postBridgeCommand(
       core.bridgeCommand(type, state.generation, state.pendingCue.segment),
     );
@@ -559,7 +570,7 @@
     if (!Number.isFinite(percentage) || !bounds.width) return;
 
     state.boundaryArmed = false;
-    state.synchronizing = true;
+    state.synchronizing = play ? "play" : "pause";
     state.navigation = {
       from: context.sentence.id,
       target: `s${sentenceNumber}`,
@@ -585,7 +596,7 @@
   function replayNow() {
     if (!state.ready || !state.segment) return;
     state.boundaryArmed = false;
-    state.synchronizing = true;
+    state.synchronizing = "play";
     state.ignoreResetUntil = Date.now() + 1000;
     postBridgeCommand(core.bridgeCommand("seek-play", state.generation, state.segment));
   }
@@ -602,7 +613,7 @@
     if (action === "next") navigate("next");
     else if (action === "repeat") replayNow();
     else {
-      state.synchronizing = true;
+      state.synchronizing = "pause";
       postBridgeCommand(core.bridgeCommand("pause", state.generation));
     }
   }
@@ -684,17 +695,13 @@
         state.playbackQueue.shift();
         if (state.playbackQueue[0]) sendPlayback(state.playbackQueue[0].command);
       }
-      if (
-        state.autoplayBlocked ||
-        (state.synchronizing &&
-          [core.PLAYER_STATES.PAUSED, core.PLAYER_STATES.CUED].includes(
-            event.detail.state,
-          ))
-      ) {
-        setStatus("paused");
-      } else if (state.ready) {
-        setStatus("ready");
-      }
+      const status = core.playbackStatus(
+        state.autoplayBlocked,
+        state.synchronizing,
+        event.detail.state,
+        state.ready,
+      );
+      if (status) setStatus(status);
       if (state.ignoreResetUntil) {
         if (
           Date.now() <= state.ignoreResetUntil &&

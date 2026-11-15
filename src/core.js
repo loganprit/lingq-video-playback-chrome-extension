@@ -174,6 +174,19 @@
     return Object.hasOwn(COMPANION_STATUSES, value) ? COMPANION_STATUSES[value] : null;
   }
 
+  // Only a play that settled paused asks the reader to press Play. The
+  // companion's own Pause at a Sentence Boundary is expected.
+  function playbackStatus(autoplayBlocked, synchronizing, playerState, ready) {
+    if (
+      autoplayBlocked ||
+      (synchronizing === "play" &&
+        [PLAYER_STATES.PAUSED, PLAYER_STATES.CUED].includes(playerState))
+    ) {
+      return "paused";
+    }
+    return ready ? "ready" : null;
+  }
+
   function boundaryAction(mode, hasNext) {
     if (playbackMode(mode) === "repeat") return "repeat";
     return mode === "continue" && hasNext ? "next" : "stay";
@@ -245,6 +258,16 @@
       default:
         return null;
     }
+  }
+
+  function menuButtonKey(event) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return null;
+    if (event.key === "Escape" || event.key === " " || (event.key === "Enter" && event.repeat)) {
+      return "consume";
+    }
+    return event.type === "keydown" && ["ArrowDown", "ArrowUp"].includes(event.key)
+      ? "open"
+      : null;
   }
 
   function validGeneration(value) {
@@ -393,10 +416,12 @@
     initialCue,
     layoutAction,
     lifecycleAction,
+    menuButtonKey,
     menuKey,
     parseBridgeCommand,
     parseBridgeEvent,
     playbackMode,
+    playbackStatus,
     readerLesson,
     segmentTransition,
     seekTarget,

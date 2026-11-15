@@ -20,7 +20,7 @@ The extension adds two items to LingQ's footer, styled like LingQ's own *Page Vi
 - **Replay** replays the current sentence once (Replay Now).
 - **Playback Mode** shows what happens at the end of each sentence: *Pause at end*, *Continue at end*, or *Repeat at end*. Click it, or focus it and press `Enter` or an arrow key, to open its menu. In the menu, the arrow keys, `Home`, and `End` move, `Enter` or `Space` chooses, and `Escape` closes. The menu also lists the keyboard shortcuts. The choice is saved across reloads.
 
-A short status appears beside the controls only while the video loads or when it needs you, for example to press Play. Screen readers still hear "Video ready."
+A short status appears just above the footer only while the video loads or when it needs you, for example to press Play after the browser blocked playback. Pausing at the end of a sentence in Pause mode shows nothing. Screen readers still hear "Video ready."
 
 ## Keyboard shortcuts
 
@@ -31,7 +31,7 @@ A short status appears beside the controls only while the video loads or when it
 | `P` | Go to the previous sentence |
 | `R` | Replay the current sentence once (also the **Replay** button) |
 
-Shortcuts are ignored for modified or repeated key presses and while an editable control owns focus. `N`, `P`, and `R` are also ignored while a button, link, or other interactive control owns focus. Clicking a companion button or menu option with the mouse returns focus to the page, so the letter keys keep working. `Space` still plays or pauses the video from a focused button or link, because LingQ would otherwise play its own lesson audio. Inside the open Playback Mode menu, every key belongs to the menu, so `Space` chooses the focused option.
+Shortcuts are ignored for modified or repeated key presses and while an editable control owns focus. `N`, `P`, and `R` are also ignored while a button, link, or other interactive control owns focus. Clicking a companion button or menu option with the mouse returns focus to the page, so the letter keys keep working. `Space` still plays or pauses the video from a focused button or link, because LingQ would otherwise play its own lesson audio. Inside the open Playback Mode menu, `N`, `P`, `R`, and `Space` never trigger shortcuts. `Space` chooses the focused option, and the menu keeps its navigation keys from LingQ. On the Playback Mode button itself, `Escape` and `Space` never reach LingQ.
 
 ## Install
 
