@@ -16,7 +16,7 @@ The companion makes LingQ's existing sentence study workflow video-first: it pre
 
 ## Positioning
 
-The extension improves LingQ's own Sentence View rather than replacing it. It coordinates LingQ's sentence timestamps and native navigation with the documented YouTube IFrame Player API while leaving LingQ's vocabulary, translation, sidebar, reader controls, and sentence DOM intact.
+The extension improves LingQ's own Sentence View rather than replacing it. It coordinates LingQ's sentence timestamps and native navigation with the YouTube IFrame Player API, plus a few undocumented embed messages that keep the player in sync after LingQ reloads it, while leaving LingQ's vocabulary, translation, sidebar, reader controls, and sentence DOM intact.
 
 ## Operating Context
 

@@ -337,7 +337,48 @@ test("takes a ready announcement only from the bound frame's YouTube embed", () 
   bridge.announce("widget2", { data: JSON.stringify({ event: "onReady" }) });
   bridge.announce("widget2", { data: { event: "onReady", channel: "widget" } });
   bridge.announce("widget2", { source: null });
+  bridge.announce("widget2", { origin: "https://www.youtube.com.example" });
+  bridge.announce("widget2", {
+    data: JSON.stringify({ event: "infoDelivery", info: "onReady", channel: "widget", id: 1 }),
+  });
 
   assert.deepEqual(bridge.events, [core.bridgeEvent("ready", 1)]);
   assert.deepEqual([...bridge.embed("widget2").subscriptions], []);
+});
+
+test("re-subscribes a reloaded embed under its own widget id and origin", () => {
+  const other = fakePlayer({ ready: true });
+  const existing = fakePlayer({ ready: true });
+  const bridge = loadBridge({ frames: { widget5: other, widget2: existing } });
+
+  bridge.announce("widget2");
+  bridge.bind(1, "widget2");
+  bridge.reload("widget2");
+  bridge.announce("widget2");
+
+  assert.deepEqual(
+    [...bridge.embed("widget2").subscriptions],
+    ["onStateChange", "onError", "onAutoplayBlocked"],
+  );
+
+  bridge.reload("widget2");
+  bridge.announce("widget2", { origin: "https://www.youtube-nocookie.com" });
+  assert.deepEqual(bridge.events, [
+    core.bridgeEvent("ready", 1),
+    core.bridgeEvent("ready", 1),
+    core.bridgeEvent("ready", 1),
+  ]);
+});
+
+test("waits for the player after an announcement that comes first", () => {
+  const existing = fakePlayer({ ready: false });
+  const bridge = loadBridge({ existing });
+
+  bridge.bind(1);
+  bridge.announce("widget2");
+  assert.deepEqual(bridge.events, []);
+
+  existing.becomeReady();
+  existing.fire("onReady");
+  assert.deepEqual(bridge.events, [core.bridgeEvent("ready", 1)]);
 });
