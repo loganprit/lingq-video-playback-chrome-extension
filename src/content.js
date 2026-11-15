@@ -69,10 +69,14 @@
 
   function playerContext(context) {
     const modal = document.querySelector(".video-player.lspc-player, .video-player.is-active");
+    // LingQ renders the modal through a React portal into this container, and
+    // React removes the modal from it when the video closes. So the companion
+    // moves the container and leaves the modal inside it.
+    const container = modal?.parentElement;
     const frame = eligibleFrame(modal);
 
-    return modal && frame && frame !== state.blockedFrame
-      ? { ...context, modal, frame }
+    return container?.matches(".modal-container") && frame && frame !== state.blockedFrame
+      ? { ...context, modal, container, frame }
       : null;
   }
 
@@ -89,10 +93,12 @@
       layout.modal.classList.remove("lspc-player");
       layout.portal.classList.remove("lspc-portal");
       layout.reader.classList.remove("lspc-reader");
-      if (layout.parent.isConnected) {
+      // LingQ removes the container itself when it closes the video, so only a
+      // container still in the portal goes back.
+      if (layout.container.parentNode === layout.portal) {
         const sibling = layout.nextSibling;
         layout.parent.insertBefore(
-          layout.modal,
+          layout.container,
           sibling?.parentNode === layout.parent ? sibling : null,
         );
       }
@@ -360,8 +366,8 @@
       setMenuOpen(open);
       if (!open) releasePointerFocus(event);
     });
-    // LingQ never sees Escape or Space here. Escape on the page crashes its
-    // reader, and Space would play its lesson audio.
+    // LingQ never sees Escape or Space here. Escape would close its video, and
+    // Space would play its lesson audio.
     const handleButtonKey = (event) => {
       const action = core.menuButtonKey(event);
       if (!action) return;
@@ -383,12 +389,12 @@
     renderMode();
   }
 
-  function mount({ reader, portal, footer, modal }) {
+  function mount({ reader, portal, footer, modal, container }) {
     const next = { modal, portal, reader, footer };
     const action = core.layoutAction(state.layout, next);
     if (
       action === "retain" &&
-      modal.parentNode === portal &&
+      container.parentNode === portal &&
       state.modeControl?.parentNode === footer
     ) {
       modal.classList.add("lspc-player");
@@ -404,7 +410,7 @@
       state.layout = { ...state.layout, ...next };
       portal.classList.add("lspc-portal");
       reader.classList.add("lspc-reader");
-      portal.append(modal);
+      portal.append(container);
       if (state.statusKind) setStatus(state.statusKind, footer);
       mountModeControl();
       return;
@@ -412,16 +418,17 @@
     restoreLayout();
     state.layout = {
       modal,
+      container,
       portal,
       reader,
       footer,
-      parent: modal.parentNode,
-      nextSibling: modal.nextSibling,
+      parent: container.parentNode,
+      nextSibling: container.nextSibling,
     };
     modal.classList.add("lspc-player");
     portal.classList.add("lspc-portal");
     reader.classList.add("lspc-reader");
-    portal.append(modal);
+    portal.append(container);
     mountModeControl();
   }
 
