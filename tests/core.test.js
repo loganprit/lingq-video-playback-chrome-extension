@@ -165,22 +165,29 @@ test("normalizes persisted Playback Modes to Pause", () => {
   assert.equal(core.playbackMode(), "pause");
 });
 
-test("describes each visible companion readiness state", () => {
-  assert.equal(core.companionStatus("loading"), "Preparing video…");
-  assert.equal(core.companionStatus("ready"), "Video ready.");
-  assert.equal(
-    core.companionStatus("paused"),
-    "Playback paused. Press Play in the video to continue.",
-  );
-  assert.equal(
-    core.companionStatus("failed"),
-    "Video unavailable. Reload this page to retry.",
-  );
-  assert.equal(
-    core.companionStatus("unsupported"),
-    "This video isn’t supported in Sentence View.",
-  );
+test("shows a companion status only when it needs the reader", () => {
+  assert.deepEqual(core.companionStatus("loading"), {
+    message: "Preparing video…",
+    visible: true,
+  });
+  assert.deepEqual(core.companionStatus("ready"), {
+    message: "Video ready.",
+    visible: false,
+  });
+  assert.deepEqual(core.companionStatus("paused"), {
+    message: "Playback paused. Press Play in the video to continue.",
+    visible: true,
+  });
+  assert.deepEqual(core.companionStatus("failed"), {
+    message: "Video unavailable. Reload this page to retry.",
+    visible: true,
+  });
+  assert.deepEqual(core.companionStatus("unsupported"), {
+    message: "This video isn’t supported in Sentence View.",
+    visible: true,
+  });
   assert.equal(core.companionStatus(), null);
+  assert.equal(core.companionStatus("toString"), null);
 });
 
 test("chooses each Sentence Boundary reaction without wrapping", () => {
@@ -294,6 +301,134 @@ test("leaves a Space press in a text field to the page", () => {
     claimed: [false, false, false],
     lingqAudioToggles: 3,
   });
+});
+
+// Holds a key on the selected menu option the way Chrome delivers it: the
+// companion's capture listener, then the focused element, then LingQ, then
+// the button's native activation. Choosing moves focus to the mode button.
+function holdInMenu(key, enabled) {
+  const page = new EventTarget();
+  const result = { actions: [], choices: 0, reopened: 0, lingq: [] };
+  let focus = "item";
+
+  page.addEventListener("keydown", companion);
+  page.addEventListener("keyup", companion);
+  page.addEventListener("keydown", owner);
+  page.addEventListener("keyup", owner);
+  page.addEventListener("keydown", lingq);
+  page.addEventListener("keyup", lingq);
+
+  function companion(event) {
+    const target = { editable: false, interactive: true, menu: focus === "item" };
+    const action = core.claimShortcut(event, enabled, target);
+    if (action && action !== "consume") result.actions.push(action);
+  }
+  function owner(event) {
+    const action =
+      focus === "item" ? core.menuKey(event, 0, 3)?.type : core.menuButtonKey(event);
+    if (!action) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (focus === "item" && event.type === "keydown" && action === "choose") {
+      result.choices += 1;
+      focus = "button";
+    }
+  }
+  function lingq(event) {
+    result.lingq.push(`${event.type}:${event.key}`);
+  }
+
+  const send = (type, repeat) => {
+    const event = new Event(type, { cancelable: true });
+    Object.defineProperties(event, {
+      code: { value: key === " " ? "Space" : key },
+      key: { value: key },
+      repeat: { value: repeat },
+    });
+    page.dispatchEvent(event);
+    const activates = key === " " ? type === "keyup" : type === "keydown";
+    if (focus === "button" && activates && !event.defaultPrevented) result.reopened += 1;
+  };
+  send("keydown", false);
+  for (let index = 0; index < 3; index += 1) send("keydown", true);
+  send("keyup", false);
+  return result;
+}
+
+test("chooses with Space in the Playback Mode menu without toggling playback", () => {
+  for (const enabled of [true, false]) {
+    assert.deepEqual(holdInMenu(" ", enabled), {
+      actions: [],
+      choices: 1,
+      reopened: 0,
+      lingq: [],
+    });
+  }
+  for (const key of ["N", "P", "R"]) {
+    assert.equal(core.shortcutAction({ key, menu: true, interactive: true }), null);
+  }
+});
+
+test("chooses once when Enter is held in the Playback Mode menu", () => {
+  for (const enabled of [true, false]) {
+    assert.deepEqual(holdInMenu("Enter", enabled), {
+      actions: [],
+      choices: 1,
+      reopened: 0,
+      lingq: ["keyup:Enter"],
+    });
+  }
+});
+
+test("keeps Escape and Space on the mode button away from LingQ", () => {
+  for (const type of ["keydown", "keyup"]) {
+    assert.equal(core.menuButtonKey({ type, key: "Escape" }), "consume");
+    assert.equal(core.menuButtonKey({ type, key: " " }), "consume");
+  }
+  assert.equal(core.menuButtonKey({ type: "keydown", key: "Enter", repeat: true }), "consume");
+  assert.equal(core.menuButtonKey({ type: "keydown", key: "Enter" }), null);
+  assert.equal(core.menuButtonKey({ type: "keydown", key: "ArrowDown" }), "open");
+  assert.equal(core.menuButtonKey({ type: "keydown", key: "ArrowUp" }), "open");
+  assert.equal(core.menuButtonKey({ type: "keyup", key: "ArrowDown" }), null);
+  assert.equal(core.menuButtonKey({ type: "keydown", key: "Escape", ctrlKey: true }), null);
+  assert.equal(core.menuButtonKey({ type: "keydown", key: "n" }), null);
+});
+
+test("asks for Play only when a play settled paused", () => {
+  const { PAUSED, CUED, PLAYING } = core.PLAYER_STATES;
+
+  assert.equal(core.playbackStatus(true, false, PAUSED, true), "paused");
+  assert.equal(core.playbackStatus(false, "play", PAUSED, true), "paused");
+  assert.equal(core.playbackStatus(false, "play", CUED, true), "paused");
+  assert.equal(core.playbackStatus(false, "pause", PAUSED, true), "ready");
+  assert.equal(core.playbackStatus(false, false, PAUSED, true), "ready");
+  assert.equal(core.playbackStatus(false, "play", PLAYING, true), "ready");
+  assert.equal(core.playbackStatus(false, "pause", PAUSED, false), null);
+});
+
+test("moves through the Playback Mode menu with wrapping arrows and Home/End", () => {
+  const key = (name, index) => core.menuKey({ key: name }, index, 3);
+
+  assert.deepEqual(key("ArrowDown", 0), { type: "focus", index: 1 });
+  assert.deepEqual(key("ArrowDown", 2), { type: "focus", index: 0 });
+  assert.deepEqual(key("ArrowUp", 0), { type: "focus", index: 2 });
+  assert.deepEqual(key("ArrowUp", 2), { type: "focus", index: 1 });
+  assert.deepEqual(key("Home", 2), { type: "focus", index: 0 });
+  assert.deepEqual(key("End", 0), { type: "focus", index: 2 });
+});
+
+test("chooses, closes, or leaves the Playback Mode menu from the keyboard", () => {
+  assert.deepEqual(core.menuKey({ key: "Enter" }, 1, 3), { type: "choose", index: 1 });
+  assert.deepEqual(core.menuKey({ key: " " }, 2, 3), { type: "choose", index: 2 });
+  assert.deepEqual(core.menuKey({ key: " ", repeat: true }, 2, 3), { type: "hold" });
+  assert.deepEqual(core.menuKey({ key: "Enter", repeat: true }, 2, 3), { type: "hold" });
+  assert.deepEqual(core.menuKey({ key: "Escape" }, 0, 3), { type: "close" });
+  assert.deepEqual(core.menuKey({ key: "Tab" }, 0, 3), { type: "leave" });
+  assert.deepEqual(core.menuKey({ key: "Tab", shiftKey: true }, 0, 3), { type: "leave" });
+  for (const modifier of ["altKey", "ctrlKey", "metaKey"]) {
+    assert.equal(core.menuKey({ key: "ArrowDown", [modifier]: true }, 0, 3), null);
+  }
+  assert.equal(core.menuKey({ key: "n" }, 0, 3), null);
 });
 
 test("claims the previous-Sentence key in the same cases as Next", () => {
