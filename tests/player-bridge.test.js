@@ -7,6 +7,7 @@ const vm = require("node:vm");
 const core = require("../src/core.js");
 
 const ORIGIN = "https://www.lingq.com";
+const YOUTUBE = "https://www.youtube.com";
 const SOURCE = fs.readFileSync(
   path.join(__dirname, "../src/player-bridge.js"),
   "utf8",
@@ -41,11 +42,41 @@ function fakePlayer({ ready }) {
   return player;
 }
 
+// The document inside a YouTube iframe. It reports only the player events it
+// was asked for, and a repeated request changes nothing. The YT player asks
+// once per event type, so the first embed has every event and a reloaded one
+// has none.
+function fakeEmbed(widgetId, events) {
+  const subscriptions = new Set(events);
+  return {
+    subscriptions,
+    postMessage(data, origin) {
+      const message = JSON.parse(data);
+      if (
+        origin === YOUTUBE &&
+        message.event === "command" &&
+        message.func === "addEventListener" &&
+        message.channel === "widget" &&
+        message.id === widgetId
+      ) {
+        subscriptions.add(message.args[0]);
+      }
+    },
+  };
+}
+
 function loadBridge({ existing, get = true, frames = { widget2: existing } }) {
-  const src = "https://www.youtube.com/embed/VQMZfw9CYaM?enablejsapi=1&origin=" +
+  const src = `${YOUTUBE}/embed/VQMZfw9CYaM?enablejsapi=1&origin=` +
     encodeURIComponent(ORIGIN);
-  const frameFor = (id) => ({ id, src, closest: () => null });
-  const frameObjects = Object.fromEntries(Object.keys(frames).map((id) => [id, frameFor(id)]));
+  const frameFor = (id, index) => ({
+    id,
+    src,
+    closest: () => null,
+    contentWindow: fakeEmbed(index + 1, ["onStateChange", "onError", "onAutoplayBlocked"]),
+  });
+  const frameObjects = Object.fromEntries(
+    Object.keys(frames).map((id, index) => [id, frameFor(id, index)]),
+  );
   let current = frameObjects[Object.keys(frames)[0]];
   const constructed = [];
   const events = [];
@@ -88,6 +119,29 @@ function loadBridge({ existing, get = true, frames = { widget2: existing } }) {
     bind(generation, id) {
       if (id) current = frameObjects[id];
       window.postMessage(core.bridgeCommand("bind", generation), ORIGIN);
+    },
+    // Moving an iframe in the DOM reloads it into a new window.
+    reload(id) {
+      frameObjects[id].contentWindow = fakeEmbed(Object.keys(frames).indexOf(id) + 1, []);
+    },
+    // An embed says this each time it finishes loading.
+    announce(id, message = {}) {
+      const event = {
+        source: frameObjects[id].contentWindow,
+        origin: YOUTUBE,
+        data: JSON.stringify({
+          event: "onReady",
+          info: null,
+          channel: "widget",
+          id: Object.keys(frames).indexOf(id) + 1,
+        }),
+        ...message,
+      };
+      for (const handler of handlers) handler(event);
+    },
+    embed: (id) => frameObjects[id].contentWindow,
+    embedEvent(id, type, data) {
+      if (frameObjects[id].contentWindow.subscriptions.has(type)) frames[id].fire(type, data);
     },
   };
 }
@@ -208,4 +262,82 @@ test("reports a play the browser blocked on the current ready player", () => {
     core.bridgeEvent("ready", 2),
     core.bridgeEvent("blocked", 2),
   ]);
+});
+
+test("waits for a moved frame's embed before reporting ready", () => {
+  const existing = fakePlayer({ ready: true });
+  const bridge = loadBridge({ existing });
+
+  bridge.announce("widget2");
+  bridge.bind(1);
+  bridge.reload("widget2");
+  bridge.bind(2);
+  assert.deepEqual(bridge.events, [core.bridgeEvent("ready", 1)]);
+
+  bridge.announce("widget2");
+  assert.deepEqual(bridge.events, [
+    core.bridgeEvent("ready", 1),
+    core.bridgeEvent("ready", 2),
+  ]);
+});
+
+test("waits for the embed when the frame moved before the first bind", () => {
+  const existing = fakePlayer({ ready: true });
+  const bridge = loadBridge({ existing });
+
+  bridge.announce("widget2");
+  bridge.reload("widget2");
+  bridge.bind(1);
+  assert.deepEqual(bridge.events, []);
+
+  bridge.announce("widget2");
+  assert.deepEqual(bridge.events, [core.bridgeEvent("ready", 1)]);
+});
+
+test("reports player events again after the bound frame's embed reloads", () => {
+  const existing = fakePlayer({ ready: true });
+  const bridge = loadBridge({ existing });
+
+  bridge.announce("widget2");
+  bridge.bind(1);
+  bridge.reload("widget2");
+  bridge.announce("widget2");
+  bridge.embedEvent("widget2", "onStateChange", core.PLAYER_STATES.PLAYING);
+  bridge.embedEvent("widget2", "onAutoplayBlocked");
+  bridge.embedEvent("widget2", "onError");
+
+  assert.deepEqual(bridge.events, [
+    core.bridgeEvent("ready", 1),
+    core.bridgeEvent("ready", 1),
+    core.bridgeEvent("state", 1, {
+      state: core.PLAYER_STATES.PLAYING,
+      currentTime: 12.5,
+    }),
+    core.bridgeEvent("blocked", 1),
+    core.bridgeEvent("error", 1, { reason: "player-error" }),
+  ]);
+});
+
+test("takes a ready announcement only from the bound frame's YouTube embed", () => {
+  const first = fakePlayer({ ready: true });
+  const second = fakePlayer({ ready: true });
+  const bridge = loadBridge({ frames: { widget2: first, widget7: second } });
+
+  bridge.announce("widget2");
+  bridge.bind(1, "widget2");
+  bridge.reload("widget7");
+  bridge.announce("widget7");
+  assert.deepEqual(bridge.events, [core.bridgeEvent("ready", 1)]);
+  assert.deepEqual([...bridge.embed("widget7").subscriptions], []);
+
+  bridge.reload("widget2");
+  bridge.bind(2, "widget2");
+  bridge.announce("widget2", { origin: "https://example.com" });
+  bridge.announce("widget2", { data: "onReady" });
+  bridge.announce("widget2", { data: JSON.stringify({ event: "onReady" }) });
+  bridge.announce("widget2", { data: { event: "onReady", channel: "widget" } });
+  bridge.announce("widget2", { source: null });
+
+  assert.deepEqual(bridge.events, [core.bridgeEvent("ready", 1)]);
+  assert.deepEqual([...bridge.embed("widget2").subscriptions], []);
 });
