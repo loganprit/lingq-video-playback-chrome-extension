@@ -231,7 +231,7 @@ test("resolves Space from a focused control but leaves letters to the control", 
   assert.equal(core.shortcutAction({ key: "Space", repeat: true, ...control }), "consume");
   assert.equal(core.shortcutAction({ key: "Space", modified: true, ...control }), null);
 
-  for (const key of ["N", "R"]) {
+  for (const key of ["N", "P", "R"]) {
     assert.equal(core.shortcutAction({ key, ...control }), null);
     assert.equal(core.shortcutAction({ key, type: "keyup", ...control }), null);
   }

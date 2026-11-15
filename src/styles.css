@@ -160,7 +160,7 @@
 }
 
 .lspc-tip:hover .lspc-tooltip,
-.lspc-tip:focus-within .lspc-tooltip {
+.lspc-tip:has(:focus-visible) .lspc-tooltip {
   opacity: 1;
   transform: translateY(0);
 }

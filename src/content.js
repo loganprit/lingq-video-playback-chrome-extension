@@ -143,6 +143,12 @@
     }
   }
 
+  // A focused button keeps the letter shortcuts for itself, so a mouse click
+  // gives focus back to the page. Keyboard activation (detail 0) keeps it.
+  function releasePointerFocus(event) {
+    if (event.detail > 0) event.currentTarget.blur();
+  }
+
   function mountModeControl() {
     const footer = state.layout?.footer;
     if (!footer) return;
@@ -164,7 +170,8 @@
       button.type = "button";
       button.dataset.mode = mode;
       button.textContent = mode[0].toUpperCase() + mode.slice(1);
-      button.addEventListener("click", () => {
+      button.addEventListener("click", (event) => {
+        releasePointerFocus(event);
         state.mode = mode;
         renderMode();
         void chrome.storage.local.set({ [STORAGE_KEY]: mode });
@@ -179,7 +186,10 @@
     replayButton.textContent = "Replay Now";
     replayButton.setAttribute("aria-describedby", "lspc-replay-tooltip");
     replayButton.setAttribute("aria-keyshortcuts", "R");
-    replayButton.addEventListener("click", replayNow);
+    replayButton.addEventListener("click", (event) => {
+      releasePointerFocus(event);
+      replayNow();
+    });
     const replayTooltip = document.createElement("span");
     replayTooltip.id = "lspc-replay-tooltip";
     replayTooltip.className = "lspc-tooltip";
