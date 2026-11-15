@@ -187,9 +187,16 @@
     return ready ? "ready" : null;
   }
 
-  function boundaryAction(mode, hasNext) {
+  function boundaryAction(mode, hasNext, selectionOpen = false) {
+    if (selectionOpen) return "hold";
     if (playbackMode(mode) === "repeat") return "repeat";
     return mode === "continue" && hasNext ? "next" : "stay";
+  }
+
+  // A selection that ends outside a Vocabulary Hold, such as one made while
+  // paused, never starts playback.
+  function holdRelease(hold, sentenceId, mode, hasNext) {
+    return hold && hold.sentence === sentenceId ? boundaryAction(mode, hasNext) : null;
   }
 
   function boundaryEvent(armed, playerState, expectedPlayback = false) {
@@ -413,6 +420,7 @@
     companionStatus,
     cueCommand,
     explicitPlayback,
+    holdRelease,
     initialCue,
     layoutAction,
     lifecycleAction,

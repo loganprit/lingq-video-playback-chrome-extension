@@ -197,6 +197,33 @@ test("chooses each Sentence Boundary reaction without wrapping", () => {
   assert.equal(core.boundaryAction("repeat", false), "repeat");
 });
 
+test("holds at the Sentence Boundary in every Playback Mode while a selection is open", () => {
+  for (const mode of ["pause", "continue", "repeat"]) {
+    assert.equal(core.boundaryAction(mode, true, true), "hold");
+    assert.equal(core.boundaryAction(mode, false, true), "hold");
+  }
+  assert.equal(core.boundaryAction("continue", true, false), "next");
+});
+
+test("runs the Playback Mode's reaction when a held selection ends", () => {
+  const hold = { sentence: "s11" };
+  assert.equal(core.holdRelease(hold, "s11", "pause", true), "stay");
+  assert.equal(core.holdRelease(hold, "s11", "continue", true), "next");
+  assert.equal(core.holdRelease(hold, "s11", "continue", false), "stay");
+  assert.equal(core.holdRelease(hold, "s11", "repeat", true), "repeat");
+});
+
+test("ignores a selection that ends before the boundary or while paused", () => {
+  for (const mode of ["pause", "continue", "repeat"]) {
+    assert.equal(core.holdRelease(null, "s11", mode, true), null);
+  }
+});
+
+test("drops a hold whose sentence is no longer active without reacting", () => {
+  assert.equal(core.holdRelease({ sentence: "s11" }, "s12", "continue", true), null);
+  assert.equal(core.holdRelease({ sentence: "s11" }, undefined, "repeat", true), null);
+});
+
 test("reacts once only after expected bounded playback", () => {
   const armed = core.boundaryEvent(false, core.PLAYER_STATES.PLAYING, true);
   const reached = core.boundaryEvent(armed.armed, core.PLAYER_STATES.ENDED);
