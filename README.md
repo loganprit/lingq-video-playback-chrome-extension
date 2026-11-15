@@ -76,6 +76,6 @@ Supported scope is deliberately narrow:
 - Sentence View
 - YouTube-backed lessons
 
-LingQ has no public reader playback API. The selectors used by `src/content.js` may need updates after a LingQ redesign. The extension watches the documented YouTube player time while a Sentence is playing so it can stop at the exact Sentence Boundary without reloading the video.
+LingQ has no public reader playback API. The selectors used by `src/content.js` may need updates after a LingQ redesign. The extension watches the documented YouTube player time while a Sentence is playing so it can stop at the exact Sentence Boundary without reloading the video. Moving LingQ's video on the page reloads it. To tell when the reloaded video is ready and to get its state changes again, the extension reads and sends the undocumented messages that YouTube's player and embed exchange. If YouTube changes them, the extension falls back to the documented player methods, and the video may stop reporting state changes after a switch to Page View and back.
 
 See [`PLAN.md`](PLAN.md) for the implementation decisions and acceptance checks.
