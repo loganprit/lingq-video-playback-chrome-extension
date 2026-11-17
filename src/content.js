@@ -17,6 +17,8 @@
     cueKey: null,
     frame: null,
     generation: 0,
+    // null, or the Vocabulary Hold: { sentence } waiting for its selection to end.
+    hold: null,
     ignoreResetUntil: 0,
     layout: null,
     lessonKey: null,
@@ -116,6 +118,7 @@
     state.cueKey = null;
     state.navigation = null;
     state.boundaryArmed = false;
+    cancelHold();
     state.ignoreResetUntil = 0;
     state.synchronizing = false;
     state.autoplayBlocked = false;
@@ -468,6 +471,7 @@
       Date.now(),
     );
     state.playRequest = null;
+    cancelHold();
     if (type === "seek-play") state.synchronizing = "play";
     postBridgeCommand(
       core.bridgeCommand(type, state.generation, state.pendingCue.segment),
@@ -557,6 +561,7 @@
     const target = core.adjacentSentence(current, state.sentences?.length, direction);
     if (!state.layout || !target) return false;
 
+    cancelHold();
     state.navigation = { from: context.sentence.id, target: `s${target}`, play: true };
     return true;
   }
@@ -603,27 +608,70 @@
 
   function replayNow() {
     if (!state.ready || !state.segment) return;
+    cancelHold();
     state.boundaryArmed = false;
     state.synchronizing = "play";
     state.ignoreResetUntil = Date.now() + 1000;
     postBridgeCommand(core.bridgeCommand("seek-play", state.generation, state.segment));
   }
 
-  function handleSentenceBoundary() {
-    state.boundaryArmed = false;
-    state.ignoreResetUntil = Date.now() + 1000;
-    const context = readerContext();
+  function hasNextSentence(context) {
     const current = Number(context?.sentence.id.slice(1));
-    const hasNext = Boolean(
-      core.adjacentSentence(current, state.sentences?.length, "next"),
+    return Boolean(core.adjacentSentence(current, state.sentences?.length, "next"));
+  }
+
+  // LingQ marks a selected word with is-selected and a selected phrase with
+  // selected-text, and removes the mark when the reader clicks off the sentence.
+  function selectionOpen(context) {
+    return Boolean(context?.sentence.querySelector(".is-selected, .selected-text"));
+  }
+
+  const selectionWatch = new MutationObserver(() => {
+    const context = readerContext();
+    if (!state.hold || selectionOpen(context)) return;
+    const action = core.holdRelease(
+      state.hold,
+      context?.sentence.id,
+      state.mode,
+      hasNextSentence(context),
     );
-    const action = core.boundaryAction(state.mode, hasNext);
+    cancelHold();
+    if (action) runBoundaryAction(action);
+  });
+
+  function cancelHold() {
+    state.hold = null;
+    selectionWatch.disconnect();
+  }
+
+  function runBoundaryAction(action) {
     if (action === "next") navigate("next");
     else if (action === "repeat") replayNow();
     else {
       state.synchronizing = "pause";
       postBridgeCommand(core.bridgeCommand("pause", state.generation));
     }
+  }
+
+  function handleSentenceBoundary() {
+    state.boundaryArmed = false;
+    state.ignoreResetUntil = Date.now() + 1000;
+    const context = readerContext();
+    const action = core.boundaryAction(
+      state.mode,
+      hasNextSentence(context),
+      selectionOpen(context),
+    );
+    if (action === "hold") {
+      state.hold = { sentence: context.sentence.id };
+      selectionWatch.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["class"],
+        childList: true,
+        subtree: true,
+      });
+    }
+    runBoundaryAction(action);
   }
 
   function sendPlayback(command) {
@@ -633,6 +681,7 @@
 
   function togglePlayback() {
     if (!state.ready || !state.segment) return;
+    cancelHold();
     const command = core.explicitPlayback(
       state.playbackQueue.at(-1)?.expectedState ?? state.playerState,
       state.playerTime,
@@ -694,7 +743,10 @@
 
     if (event.type === "state") {
       state.playerTime = event.detail.currentTime;
-      if (event.detail.state === core.PLAYER_STATES.PLAYING) state.autoplayBlocked = false;
+      if (event.detail.state === core.PLAYER_STATES.PLAYING) {
+        state.autoplayBlocked = false;
+        cancelHold();
+      }
       const pendingPlayback = state.playbackQueue[0];
       if (!pendingPlayback || pendingPlayback.expectedState === event.detail.state) {
         state.playerState = event.detail.state;
@@ -807,10 +859,6 @@
           lessonKey: core.readerLesson(location.pathname)?.key,
           until: Date.now() + PLAY_REQUEST_MS,
         };
-      }
-      if (state.layout && event.target?.closest?.(".sentence-text .sentence-item")) {
-        state.boundaryArmed = false;
-        postBridgeCommand(core.bridgeCommand("pause", state.generation));
       }
     },
     true,

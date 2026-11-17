@@ -35,6 +35,10 @@ Shortcuts are ignored for modified or repeated key presses and while an editable
 
 Anywhere else on the page, `Escape` closes the video, as it does in LingQ without the extension. Click LingQ's YouTube button to open the video again.
 
+## Vocabulary study
+
+Selecting a word or phrase doesn't pause the video. If the selection is still open when the sentence ends, the video pauses there and holds. Click off the sentence to end the selection, and the Playback Mode reacts: Continue plays the next sentence, Repeat replays it, and Pause stays paused. A selection that ends before the sentence does changes nothing, and one made while the video is paused never starts it. Play, `N`, `P`, and Replay end the hold and act at once.
+
 ## Install
 
 ### Persistent local install
