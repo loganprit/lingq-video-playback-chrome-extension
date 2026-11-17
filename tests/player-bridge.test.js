@@ -139,7 +139,9 @@ function loadBridge({ existing, get = true, frames = { widget2: existing } }) {
     this.paused = false;
     return this.started;
   };
-  const stalls = [];
+  const stalls = new Map();
+  let timers = 0;
+  let now = 0;
 
   vm.runInNewContext(SOURCE, {
     HTMLMediaElement,
@@ -148,16 +150,27 @@ function loadBridge({ existing, get = true, frames = { widget2: existing } }) {
     clearInterval() {},
     document: { querySelectorAll: () => [current] },
     location: { href: `${ORIGIN}/en/learn/es/web/reader/1`, origin: ORIGIN },
-    clearTimeout() {},
+    Date: { now: () => now },
+    clearTimeout: (id) => stalls.delete(id),
     setInterval: () => 0,
     // Only the bridge's word-audio limit waits 10 s.
-    setTimeout: (callback, ms) => (ms === 10000 ? stalls.push(callback) : 0),
+    setTimeout(callback, ms) {
+      if (ms !== 10000) return 0;
+      stalls.set(++timers, callback);
+      return timers;
+    },
     window,
   });
 
   return {
     clip: (src, started) => new HTMLMediaElement(src, started),
-    stall: () => stalls.at(-1)(),
+    advance(ms) {
+      now += ms;
+    },
+    stalls,
+    stall() {
+      for (const callback of stalls.values()) callback();
+    },
     constructed,
     events,
     bind(generation, id) {
@@ -533,4 +546,67 @@ test("restores the volume after a stalled clip, a rebind, or an error", () => {
   broken.play();
   broken.dispatch("error");
   assert.deepEqual(existing.volumes, [24, 80]);
+});
+
+test("keeps a volume the user sets to the lowered level", () => {
+  const existing = fakePlayer({ ready: true });
+  const bridge = loadBridge({ existing });
+  bridge.bind(1);
+
+  const first = bridge.clip(WORD);
+  first.play();
+  existing.echo();
+  first.dispatch("ended");
+  existing.echo();
+  existing.volume = 24;
+  bridge.advance(3000);
+  bridge.clip(WORD).play();
+
+  assert.deepEqual(existing.volumes, [24, 80, 7]);
+});
+
+test("times only the latest word against the duck's limit", () => {
+  const existing = fakePlayer({ ready: true });
+  const bridge = loadBridge({ existing });
+  bridge.bind(1);
+
+  const first = bridge.clip(WORD);
+  first.play();
+  bridge.clip(WORD).play();
+  assert.equal(bridge.stalls.size, 1);
+
+  bridge.stall();
+  bridge.clip(WORD).play();
+  assert.equal(bridge.stalls.size, 1);
+});
+
+test("ducks a word by its new source and while the video buffers", () => {
+  const existing = fakePlayer({ ready: true });
+  const bridge = loadBridge({ existing });
+  bridge.bind(1);
+  existing.playerState = core.PLAYER_STATES.BUFFERING;
+
+  const clip = bridge.clip(WORD);
+  clip.currentSrc = "data:audio/mp3;base64,//MkxAAH";
+  clip.play();
+  assert.deepEqual(existing.volumes, [24]);
+
+  clip.dispatch("emptied", true);
+  assert.deepEqual(existing.volumes, [24, 80]);
+});
+
+test("stays quiet when a new word aborts the clip's previous play", async () => {
+  const existing = fakePlayer({ ready: true });
+  const bridge = loadBridge({ existing });
+  bridge.bind(1);
+
+  const aborted = Promise.reject(new Error("AbortError"));
+  const clip = bridge.clip(WORD, aborted);
+  clip.play().catch(() => {});
+  clip.started = Promise.resolve();
+  clip.play();
+  await aborted.catch(() => {});
+  await Promise.resolve();
+
+  assert.deepEqual(existing.volumes, [24]);
 });

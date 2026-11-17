@@ -8,6 +8,9 @@
   const EMBED_ORIGINS = ["https://www.youtube.com", "https://www.youtube-nocookie.com"];
   const EMBED_EVENTS = ["onStateChange", "onError", "onAutoplayBlocked"];
   const DUCK_LIMIT_MS = 10000;
+  const ECHO_LIMIT_MS = 1000;
+  // The video keeps playing while it buffers, so a word spoken then is ducked too.
+  const AUDIBLE_STATES = [core.PLAYER_STATES.PLAYING, core.PLAYER_STATES.BUFFERING];
 
   let activeSegment = null;
   // null, or the video's volume lowered while LingQ reads words aloud:
@@ -15,6 +18,7 @@
   let duck = null;
   let restored = null;
   const watchedClips = new WeakSet();
+  const latestPlay = new WeakMap();
   let boundaryTimer = null;
   let frame = null;
   let generation = 0;
@@ -45,7 +49,11 @@
   // take the lowered volume as the video's own.
   function videoVolume() {
     const volume = player.getVolume?.();
-    if (restored?.player === player && volume === restored.lowered) return restored.volume;
+    const lagging =
+      restored?.player === player &&
+      volume === restored.lowered &&
+      Date.now() - restored.at < ECHO_LIMIT_MS;
+    if (lagging) return restored.volume;
     restored = null;
     return volume;
   }
@@ -55,7 +63,7 @@
     const { player: ducked, volume, lowered, timer } = duck;
     clearTimeout(timer);
     duck = null;
-    restored = { player: ducked, volume, lowered };
+    restored = { player: ducked, volume, lowered, at: Date.now() };
     try {
       ducked.setVolume(volume);
     } catch {
@@ -75,7 +83,7 @@
   function duckFor(clip, started) {
     if (!ready || !core.wordAudio(clip.src || clip.currentSrc)) return;
     if (!duck) {
-      if (player.getPlayerState?.() !== core.PLAYER_STATES.PLAYING) return;
+      if (!AUDIBLE_STATES.includes(player.getPlayerState?.())) return;
       const volume = videoVolume();
       const lowered = core.duckedVolume(volume);
       if (lowered === null) return;
@@ -93,7 +101,11 @@
       }
       clip.addEventListener("error", () => clipEnded(clip, true));
     }
-    Promise.resolve(started).catch(() => clipEnded(clip, true));
+    // Starting a new source aborts the clip's previous play(), which isn't an end.
+    latestPlay.set(clip, started);
+    Promise.resolve(started).catch(() => {
+      if (latestPlay.get(clip) === started) clipEnded(clip, true);
+    });
   }
 
   // LingQ plays word audio from Audio elements outside the document, whose
