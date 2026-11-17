@@ -441,7 +441,6 @@
   function picker(button, popover) {
     const node = element("div", "lspc-picker");
     button.setAttribute("aria-expanded", "false");
-    button.setAttribute("aria-controls", popover.id);
     button.addEventListener("click", (event) => {
       const open = button.getAttribute("aria-expanded") !== "true";
       setPopoverOpen(node, open);
@@ -494,6 +493,7 @@
     const modeButton = element("button", "lspc-item lspc-mode-button");
     modeButton.type = "button";
     modeButton.setAttribute("aria-haspopup", "menu");
+    modeButton.setAttribute("aria-controls", "lspc-mode-menu");
     const glyphs = element("span", "lspc-stack");
     const labels = element("span", "lspc-stack");
     for (const { mode, label, icon: paths } of MODES) {
@@ -520,6 +520,7 @@
 
     const settingsButton = footerItem(ICONS.settings, "Settings");
     settingsButton.setAttribute("aria-haspopup", "dialog");
+    settingsButton.setAttribute("aria-controls", "lspc-settings");
     settingsButton.dataset.tip = "Settings";
 
     control.append(
