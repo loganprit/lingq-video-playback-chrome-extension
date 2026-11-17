@@ -204,6 +204,43 @@
     return delay.kind === "reading" ? readingSeconds(text) : 0;
   }
 
+  // The Playback Mode's reaction at a Sentence Boundary, and the seconds the
+  // Boundary Delay waits before it.
+  function boundaryReaction(settings, hasNext, selectionOpen, text) {
+    const action = boundaryAction(settings.playbackMode, hasNext, selectionOpen);
+    return { action, wait: boundaryWait(action, settings.boundaryDelay, text) };
+  }
+
+  // A Boundary Delay at a position (lesson and sentence) that started at a time
+  // and runs out at started + wait.
+  function boundaryDelayWait(at, reaction, started) {
+    return {
+      kind: "delay",
+      at,
+      action: reaction.action,
+      started,
+      until: started + reaction.wait * 1000,
+    };
+  }
+
+  // A settings change during a Boundary Delay decides again from the new
+  // settings, as if the boundary had been reached when the wait began. A
+  // reaction that stays ends the wait. Any other keeps the wait's start with the
+  // new action and length, so Off acts at once.
+  function changedDelay(wait, reaction) {
+    return ["next", "repeat"].includes(reaction.action)
+      ? boundaryDelayWait(wait.at, reaction, wait.started)
+      : null;
+  }
+
+  // What a Boundary Delay does when it runs out. It drops itself once its
+  // sentence or lesson is no longer active, and becomes a Vocabulary Hold while
+  // a selection is open.
+  function delayEnd(wait, at, selectionOpen) {
+    if (!at || wait.at !== at) return "drop";
+    return selectionOpen ? "hold" : wait.action;
+  }
+
   // Readiness is only announced. The other states ask the reader to wait or act.
   const COMPANION_STATUSES = Object.freeze({
     loading: { message: "Preparing video…", visible: true },
@@ -252,8 +289,8 @@
   // cut short. A Boundary Delay keeps its action, and a Vocabulary Hold runs the
   // Playback Mode's reaction. A selection that ends outside a wait, such as one
   // made while paused, never starts playback.
-  function waitRelease(wait, sentenceId, mode, hasNext) {
-    if (!wait || wait.sentence !== sentenceId) return null;
+  function waitRelease(wait, at, mode, hasNext) {
+    if (!wait || !at || wait.at !== at) return null;
     return wait.kind === "delay" ? wait.action : boundaryAction(mode, hasNext);
   }
 
@@ -476,12 +513,15 @@
     SETTINGS_KEY,
     boundaryAction,
     boundaryDelay,
+    boundaryDelayWait,
     boundaryEvent,
-    boundaryWait,
+    boundaryReaction,
+    changedDelay,
     claimShortcut,
     companionSettings,
     companionStatus,
     cueCommand,
+    delayEnd,
     duckedVolume,
     explicitPlayback,
     initialCue,

@@ -37,9 +37,10 @@
     // false, or the state ("play" or "pause") a sent command is settling into.
     synchronizing: false,
     timer: null,
-    // null, or a wait at the Sentence Boundary: the Vocabulary Hold
-    // { kind: "hold", sentence } until its selection ends, or the Boundary Delay
-    // { kind: "delay", sentence, action, until, timer, drain } until it runs out.
+    // null, or a wait at the Sentence Boundary of the lesson and sentence at:
+    // the Vocabulary Hold { kind: "hold", at, delayed } until its selection
+    // ends, or the Boundary Delay { kind: "delay", at, action, started, until,
+    // timer } until it runs out.
     wait: null,
     warnings: new Set(),
   };
@@ -229,6 +230,23 @@
     return `${wait.action === "next" ? "Next" : "Repeat"} in ${seconds} s`;
   }
 
+  // The ring empties over the Boundary Delay. It follows the wait's own times,
+  // so a ring mounted mid-wait starts where the wait is.
+  function drainRing(ring) {
+    const wait = state.wait?.kind === "delay" ? state.wait : null;
+    const id = wait ? `${wait.started}:${wait.until}` : "";
+    for (const animation of ring.getAnimations()) {
+      if (animation.id !== id) animation.cancel();
+    }
+    if (!wait || ring.getAnimations().length) return;
+    const drain = ring.animate([{ strokeDashoffset: 0 }, { strokeDashoffset: 1 }], {
+      duration: Math.max(1, wait.until - wait.started),
+      fill: "forwards",
+      id,
+    });
+    drain.currentTime = Date.now() - wait.started;
+  }
+
   function render() {
     const control = state.modeControl;
     if (!control) return;
@@ -248,6 +266,7 @@
       }
     }
     control.querySelector(".lspc-countdown .lspc-label-text").textContent = left;
+    drainRing(control.querySelector(".lspc-ring-left"));
     for (const input of control.querySelectorAll("[name='lspc-boundary-delay']")) {
       input.checked = input.value === boundaryDelay.kind;
     }
@@ -279,6 +298,7 @@
 
   function saveSettings(change) {
     state.settings = core.companionSettings({ ...state.settings, ...change });
+    redecideDelay();
     render();
     void chrome.storage.local.set({ [core.SETTINGS_KEY]: state.settings });
   }
@@ -405,6 +425,7 @@
       input.type = "radio";
       input.name = "lspc-boundary-delay";
       input.value = kind;
+      input.setAttribute("aria-labelledby", `lspc-delay-${kind}-name`);
       input.setAttribute("aria-describedby", `lspc-delay-${kind}-description`);
       input.addEventListener("change", () => {
         saveSettings({ boundaryDelay: { kind, seconds: Number(seconds.value) } });
@@ -413,7 +434,9 @@
       const text = element("span", "lspc-menu-text");
       const detail = element("span", "lspc-menu-description", description);
       detail.id = `lspc-delay-${kind}-description`;
-      text.append(element("span", "lspc-menu-name", name), detail);
+      const title = element("span", "lspc-menu-name", name);
+      title.id = `lspc-delay-${kind}-name`;
+      text.append(title, detail);
       row.append(input, text);
       if (kind === "seconds") row.append(seconds);
       row.append(icon(ICONS.check, "lspc-icon lspc-check"));
@@ -772,18 +795,36 @@
     return state.sentences?.[Number(context?.sentence.id.slice(1)) - 1]?.text;
   }
 
+  // Where a wait belongs: the active lesson and sentence.
+  function position(context) {
+    return context ? `${context.lesson.key}:${context.sentence.id}` : null;
+  }
+
   const selectionWatch = new MutationObserver(() => {
     const context = readerContext();
-    if (state.wait?.kind !== "hold" || selectionOpen(context)) return;
+    const hold = state.wait;
+    if (hold?.kind !== "hold" || selectionOpen(context)) return;
     const action = core.waitRelease(
-      state.wait,
-      context?.sentence.id,
+      hold,
+      position(context),
       state.settings.playbackMode,
       hasNextSentence(context),
     );
     cancelWait();
-    if (action) react(action, context);
+    // A hold that began when its Boundary Delay ran out has already waited.
+    if (action && hold.delayed) runBoundaryAction(action);
+    else if (action) react(context, false);
   });
+
+  function hold(context, delayed) {
+    state.wait = { kind: "hold", at: position(context), delayed };
+    selectionWatch.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+      childList: true,
+      subtree: true,
+    });
+  }
 
   function cancelWait() {
     const delay = state.wait?.kind === "delay" ? state.wait : null;
@@ -791,50 +832,61 @@
     selectionWatch.disconnect();
     if (!delay) return;
     clearTimeout(delay.timer);
-    delay.drain?.cancel();
     render();
+  }
+
+  function startDelay(wait) {
+    cancelWait();
+    if (!wait) return;
+    state.wait = { ...wait, timer: null };
+    tickDelay();
   }
 
   function tickDelay() {
     const wait = state.wait;
     if (wait?.kind !== "delay") return;
     const left = wait.until - Date.now();
-    if (left <= 0) {
-      cancelWait();
-      runBoundaryAction(wait.action);
+    if (left > 0) {
+      render();
+      wait.timer = setTimeout(tickDelay, left % 1000 || 1000);
       return;
     }
-    render();
-    wait.timer = setTimeout(tickDelay, left % 1000 || 1000);
+    const context = readerContext();
+    const end = core.delayEnd(wait, position(context), selectionOpen(context));
+    cancelWait();
+    if (end === "hold") hold(context, true);
+    else if (end !== "drop") runBoundaryAction(end);
   }
 
-  // Runs the Playback Mode's reaction, after the Boundary Delay when it has one.
-  function react(action, context) {
-    const seconds = core.boundaryWait(
-      action,
-      state.settings.boundaryDelay,
+  // A settings change during a Boundary Delay decides the wait again.
+  function redecideDelay() {
+    if (state.wait?.kind !== "delay") return;
+    const context = readerContext();
+    startDelay(core.changedDelay(state.wait, reactionAt(context, false)));
+  }
+
+  function reactionAt(context, selection) {
+    return core.boundaryReaction(
+      state.settings,
+      hasNextSentence(context),
+      selection,
       sentenceText(context),
     );
-    if (!seconds) {
-      runBoundaryAction(action);
-      return;
+  }
+
+  // Runs the Playback Mode's reaction at the Sentence Boundary: a Vocabulary
+  // Hold while a selection is open, or the action after any Boundary Delay.
+  function react(context, selection) {
+    const reaction = reactionAt(context, selection);
+    if (reaction.action === "hold") {
+      hold(context, false);
+      runBoundaryAction("hold");
+    } else if (!reaction.wait) {
+      runBoundaryAction(reaction.action);
+    } else {
+      runBoundaryAction("stay");
+      startDelay(core.boundaryDelayWait(position(context), reaction, Date.now()));
     }
-    runBoundaryAction("stay");
-    const ms = seconds * 1000;
-    state.wait = {
-      kind: "delay",
-      sentence: context?.sentence.id,
-      action,
-      until: Date.now() + ms,
-      timer: null,
-      drain: state.modeControl
-        ?.querySelector(".lspc-ring-left")
-        ?.animate([{ strokeDashoffset: 0 }, { strokeDashoffset: 1 }], {
-          duration: ms,
-          fill: "forwards",
-        }),
-    };
-    tickDelay();
   }
 
   function runBoundaryAction(action) {
@@ -850,23 +902,7 @@
     state.boundaryArmed = false;
     state.ignoreResetUntil = Date.now() + 1000;
     const context = readerContext();
-    const action = core.boundaryAction(
-      state.settings.playbackMode,
-      hasNextSentence(context),
-      selectionOpen(context),
-    );
-    if (action !== "hold") {
-      react(action, context);
-      return;
-    }
-    state.wait = { kind: "hold", sentence: context.sentence.id };
-    selectionWatch.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-      childList: true,
-      subtree: true,
-    });
-    runBoundaryAction(action);
+    react(context, selectionOpen(context));
   }
 
   function sendPlayback(command) {
@@ -881,7 +917,7 @@
     const context = readerContext();
     const release = core.waitRelease(
       state.wait,
-      context?.sentence.id,
+      position(context),
       state.settings.playbackMode,
       hasNextSentence(context),
     );
