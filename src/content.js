@@ -192,8 +192,8 @@
   };
   const DELAYS = [
     { kind: "off", name: "Off", description: "Act as soon as the sentence ends" },
-    { kind: "seconds", name: "Fixed", description: "Wait the same time after each sentence" },
-    { kind: "reading", name: "Reading time", description: "Wait longer after longer sentences" },
+    { kind: "seconds", name: "Fixed", description: "The same wait every sentence" },
+    { kind: "reading", name: "Reading time", description: "Longer sentences wait longer" },
   ];
   const SHORTCUTS = [
     [["Space"], "play/pause"],
