@@ -73,8 +73,8 @@ The system is intentionally narrow rather than a standalone brand world. Its vis
 
 - Video-first composition with the real LingQ sentence directly below.
 - Footer items that look like LingQ's own: a line icon over a label, no box, LingQ's type.
-- One menu for the Playback Mode, with the shortcuts at its foot.
-- A single Playback Violet accent, used only for the selected Playback Mode in the menu.
+- One menu for the Playback Mode, with the shortcuts at its foot, and one settings panel beside it.
+- A single Playback Violet accent, used only for the selected choice in the menu and the settings panel.
 - Compact icon-only items for narrow footers, and a smaller player floor for short windows.
 
 ## Colors
@@ -83,7 +83,7 @@ The palette inherits the host page and adds only the colors required to communic
 
 ### Primary
 
-- **Playback Violet** (`#5c5ce0`, `#8f8ff0` in dark): the check and row tint that mark the selected Playback Mode in the menu. The dark tint keeps the check above 3:1 against the dark menu surface.
+- **Playback Violet** (`#5c5ce0`, `#8f8ff0` in dark): the check and row tint that mark the selected Playback Mode in the menu and the selected choice in the settings panel. The dark tint keeps the check above 3:1 against the dark menu surface.
 
 ### Neutral
 
@@ -94,9 +94,9 @@ The palette inherits the host page and adds only the colors required to communic
 
 ### Theme
 
-LingQ marks its dark theme with `theme-luminosity-dark` on `body`. It keeps `is-light-theme` set in dark, so never key on that class. The companion's colors are custom properties on `.lspc-controls`, redefined under `.theme-luminosity-dark`.
+LingQ marks its dark theme with `theme-luminosity-dark` on `body`. It keeps `is-light-theme` set in dark, so never key on that class. The companion's colors are custom properties on `.lspc-controls`, redefined under `.theme-luminosity-dark`, which also sets `color-scheme: dark` so the panel's seconds list opens dark.
 
-**The One Accent Rule.** Playback Violet marks the selected Playback Mode inside the menu and nothing else. Footer items stay neutral like LingQ's own, and violet never spreads into LingQ-owned content or decoration.
+**The One Accent Rule.** Playback Violet marks the selected choice inside the menu or the settings panel and nothing else. Footer items stay neutral like LingQ's own, and violet never spreads into LingQ-owned content or decoration.
 
 ## Typography
 
@@ -109,7 +109,7 @@ LingQ marks its dark theme with `theme-luminosity-dark` on `body`. It keeps `is-
 
 - **Footer label** (400, `0.875rem` on a 21px line): Replay and the Playback Mode button, matching LingQ's *Page View* and *Review Sentence*. Below 850px wide it drops to `0.65rem`, as LingQ's labels do.
 - **Menu option name** (600, `0.875rem`).
-- **Caption** (400–600, `0.75rem`): the menu heading, option descriptions, the shortcuts line, and the readiness status.
+- **Caption** (400–600, `0.75rem`): the menu and panel headings, option descriptions, the shortcuts line, and the readiness status.
 
 ## Layout
 
@@ -119,7 +119,7 @@ Spacing uses a 4px item gap, a 24px player-to-sentence gap, and an 8px gap betwe
 
 ## Elevation & Depth
 
-Footer items are flat: transparent at rest, with a tonal hover. The Playback Mode menu and the visible readiness status are the elevated surfaces. Both float over the reader, so they carry a soft shadow plus a 1px hairline ring that keeps their edges crisp in dark.
+Footer items are flat: transparent at rest, with a tonal hover. The Playback Mode menu, the settings panel, and the visible readiness status are the elevated surfaces. Both float over the reader, so they carry a soft shadow plus a 1px hairline ring that keeps their edges crisp in dark.
 
 **The Flat-by-Default Rule.** Do not add shadows, borders, or blur to in-flow controls. Only a temporary surface that overlaps other content, such as the Playback Mode menu or a visible status, is elevated.
 
@@ -146,6 +146,22 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 - **Options:** Pause, Continue, and Repeat as `menuitemradio`s, each with an icon, a bold name, a one-line description, and a check on the current one.
 - **Shortcuts line:** the page shortcuts as key chips under a hairline. It replaces the separate help button.
 - **Keyboard:** the arrow keys move with wrap-around, Home and End jump, Enter or Space chooses, Escape closes, and Tab closes and moves on. Choosing from the keyboard returns focus to the button. Choosing with the mouse returns focus to the page, so the letter shortcuts keep working.
+
+### Boundary Delay Countdown
+
+- **Where:** while a Boundary Delay runs, the Playback Mode button's icon becomes a ring that empties as the wait runs out, and its label reads "Next in 3 s" or "Repeat in 3 s". Both share the button's stacked grid cells, so the footer never moves. In the compact footer the ring remains and the hover caption carries the text.
+- **Semantics:** the button's accessible name stays "Playback Mode: <label>".
+
+### Settings Button
+
+- **Button:** a footer item with a sliders icon over "Settings", after the Playback Mode button. It opens the settings panel, with `aria-haspopup="dialog"` and `aria-expanded`. Escape and Space never reach LingQ from it.
+
+### Settings Panel
+
+- **Popover:** the menu's surface, radius, elevation, motion, and placement, aligned to the Settings button's right edge.
+- **Boundary Delay:** a caption heading and a one-line description over three rows styled as menu options: Off, Fixed with a 1–10 s list, and Reading time. Each row wraps a native radio that stays focusable but unseen. The selected row takes the violet tint and check, and the focused row takes the focus ring.
+- **Keyboard:** focus moves to the selected choice on open. The arrow keys choose among the radios, Tab reaches the seconds list, and Escape closes and returns focus to the button. No key pressed in the panel reaches LingQ, so Escape never also closes a word card or the video, and Space never reads the lesson aloud.
+- **Closing:** Escape, a click outside, or focus leaving the panel. Choosing keeps it open.
 
 ### Readiness Status
 
