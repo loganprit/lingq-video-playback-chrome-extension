@@ -206,11 +206,11 @@ test("holds at the Sentence Boundary in every Playback Mode while a selection is
 });
 
 test("runs the Playback Mode's reaction when a held selection ends", () => {
-  const hold = { sentence: "s11" };
-  assert.equal(core.holdRelease(hold, "s11", "pause", true), "stay");
-  assert.equal(core.holdRelease(hold, "s11", "continue", true), "next");
-  assert.equal(core.holdRelease(hold, "s11", "continue", false), "stay");
-  assert.equal(core.holdRelease(hold, "s11", "repeat", true), "repeat");
+  const hold = { kind: "hold", sentence: "s11" };
+  assert.equal(core.waitRelease(hold, "s11", "pause", true), "stay");
+  assert.equal(core.waitRelease(hold, "s11", "continue", true), "next");
+  assert.equal(core.waitRelease(hold, "s11", "continue", false), "stay");
+  assert.equal(core.waitRelease(hold, "s11", "repeat", true), "repeat");
 });
 
 test("recognizes LingQ's spoken words among its audio", () => {
@@ -232,13 +232,135 @@ test("lowers the video to 30% of its volume under a spoken word", () => {
 
 test("ignores a selection that ends before the boundary or while paused", () => {
   for (const mode of ["pause", "continue", "repeat"]) {
-    assert.equal(core.holdRelease(null, "s11", mode, true), null);
+    assert.equal(core.waitRelease(null, "s11", mode, true), null);
   }
 });
 
 test("drops a hold whose sentence is no longer active without reacting", () => {
-  assert.equal(core.holdRelease({ sentence: "s11" }, "s12", "continue", true), null);
-  assert.equal(core.holdRelease({ sentence: "s11" }, undefined, "repeat", true), null);
+  assert.equal(core.waitRelease({ kind: "hold", sentence: "s11" }, "s12", "continue", true), null);
+  assert.equal(core.waitRelease({ kind: "hold", sentence: "s11" }, undefined, "repeat", true), null);
+});
+
+const SHORT = "Hola, ¿qué tal?";
+const LONG =
+  "En general, la gente es muy comprensiva, pero si tú quieres encajar mejor en la cultura y saber cómo comportarte correctamente en ciertas circunstancias, este episodio es para ti.";
+const DELAYS = {
+  off: { kind: "off" },
+  seconds: { kind: "seconds", seconds: 3 },
+  reading: { kind: "reading" },
+};
+const settle = (mode, delay, hasNext, selectionOpen, text = LONG) => {
+  const action = core.boundaryAction(mode, hasNext, selectionOpen);
+  return { action, wait: core.boundaryWait(action, delay, text) };
+};
+
+test("normalizes the settings record and falls back to defaults", () => {
+  const defaults = { playbackMode: "pause", boundaryDelay: { kind: "off" } };
+  assert.deepEqual(core.companionSettings(), defaults);
+  assert.deepEqual(core.companionSettings("continue"), defaults);
+  assert.deepEqual(
+    core.companionSettings({
+      playbackMode: "repeat",
+      boundaryDelay: { kind: "seconds", seconds: 10, extra: true },
+      extra: 1,
+    }),
+    { playbackMode: "repeat", boundaryDelay: { kind: "seconds", seconds: 10 } },
+  );
+  assert.deepEqual(core.companionSettings({ boundaryDelay: { kind: "reading", seconds: 4 } }), {
+    playbackMode: "pause",
+    boundaryDelay: { kind: "reading" },
+  });
+  for (const seconds of [0, 11, 2.5, "3", undefined, NaN]) {
+    assert.deepEqual(core.boundaryDelay({ kind: "seconds", seconds }), { kind: "off" });
+  }
+  assert.deepEqual(core.boundaryDelay({ kind: "seconds", seconds: 1 }), { kind: "seconds", seconds: 1 });
+  assert.deepEqual(core.boundaryDelay({ kind: "later" }), { kind: "off" });
+  assert.deepEqual(core.boundaryDelay(null), { kind: "off" });
+});
+
+test("carries the old stored Playback Mode into the settings record", () => {
+  assert.deepEqual(core.storedSettings({ playbackMode: "continue" }), {
+    playbackMode: "continue",
+    boundaryDelay: { kind: "off" },
+  });
+  assert.deepEqual(core.storedSettings({ playbackMode: "autoplay" }).playbackMode, "pause");
+  assert.deepEqual(core.storedSettings({}), core.companionSettings());
+  assert.deepEqual(core.storedSettings(undefined), core.companionSettings());
+});
+
+test("prefers a stored settings record over the old Playback Mode key", () => {
+  const settings = { playbackMode: "pause", boundaryDelay: { kind: "reading" } };
+  assert.deepEqual(core.storedSettings({ settings, playbackMode: "repeat" }), settings);
+  assert.deepEqual(
+    core.storedSettings({ [core.SETTINGS_KEY]: settings, [core.LEGACY_MODE_KEY]: "repeat" }),
+    settings,
+  );
+});
+
+test("estimates a reading wait from the sentence text's length", () => {
+  assert.equal(core.readingSeconds(SHORT), 1);
+  assert.equal(core.readingSeconds(LONG), 12);
+  assert.equal(core.readingSeconds("x".repeat(105)), 7);
+  assert.equal(core.readingSeconds("x".repeat(600)), 15);
+  assert.equal(core.readingSeconds(""), 1);
+  assert.equal(core.readingSeconds(undefined), 1);
+});
+
+test("waits only before Continue's next sentence and Repeat's replay", () => {
+  const expected = {
+    pause: { off: 0, seconds: 0, reading: 0 },
+    continue: { off: 0, seconds: 3, reading: 12 },
+    repeat: { off: 0, seconds: 3, reading: 12 },
+  };
+  for (const [mode, waits] of Object.entries(expected)) {
+    for (const [kind, wait] of Object.entries(waits)) {
+      const action = { pause: "stay", continue: "next", repeat: "repeat" }[mode];
+      assert.deepEqual(settle(mode, DELAYS[kind], true, false), { action, wait }, `${mode} ${kind}`);
+    }
+  }
+});
+
+test("never waits in Continue at the lesson's last sentence", () => {
+  for (const delay of Object.values(DELAYS)) {
+    assert.deepEqual(settle("continue", delay, false, false), { action: "stay", wait: 0 });
+  }
+});
+
+test("waits longer for reading after a long sentence than a short one", () => {
+  for (const mode of ["continue", "repeat"]) {
+    const short = settle(mode, DELAYS.reading, true, false, SHORT).wait;
+    const long = settle(mode, DELAYS.reading, true, false, LONG).wait;
+    assert.ok(long > short, `${mode}: ${long} > ${short}`);
+  }
+});
+
+test("holds before any Boundary Delay while a selection is open", () => {
+  for (const mode of ["pause", "continue", "repeat"]) {
+    for (const delay of Object.values(DELAYS)) {
+      assert.deepEqual(settle(mode, delay, true, true), { action: "hold", wait: 0 });
+    }
+  }
+});
+
+test("starts the Boundary Delay once a held selection ends", () => {
+  const hold = { kind: "hold", sentence: "s11" };
+  for (const [mode, action] of [["continue", "next"], ["repeat", "repeat"]]) {
+    const released = core.waitRelease(hold, "s11", mode, true);
+    assert.equal(released, action);
+    assert.equal(core.boundaryWait(released, DELAYS.seconds, LONG), 3);
+    assert.equal(core.boundaryWait(released, DELAYS.reading, LONG), 12);
+    assert.equal(core.boundaryWait(released, DELAYS.off, LONG), 0);
+  }
+  const paused = core.waitRelease(hold, "s11", "pause", true);
+  assert.equal(core.boundaryWait(paused, DELAYS.seconds, LONG), 0);
+});
+
+test("cuts a Boundary Delay short into its own action", () => {
+  const next = { kind: "delay", sentence: "s11", action: "next" };
+  const repeat = { kind: "delay", sentence: "s11", action: "repeat" };
+  assert.equal(core.waitRelease(next, "s11", "continue", true), "next");
+  assert.equal(core.waitRelease(repeat, "s11", "repeat", true), "repeat");
+  assert.equal(core.waitRelease(next, "s12", "continue", true), null);
 });
 
 test("reacts once only after expected bounded playback", () => {

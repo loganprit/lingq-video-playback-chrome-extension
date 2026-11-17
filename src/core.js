@@ -161,6 +161,49 @@
     return ["pause", "continue", "repeat"].includes(value) ? value : "pause";
   }
 
+  const SETTINGS_KEY = "settings";
+  // Before the settings record, the Playback Mode was stored on its own.
+  const LEGACY_MODE_KEY = "playbackMode";
+
+  function boundaryDelay(value) {
+    if (
+      value?.kind === "seconds" &&
+      Number.isInteger(value.seconds) &&
+      value.seconds >= 1 &&
+      value.seconds <= 10
+    ) {
+      return { kind: "seconds", seconds: value.seconds };
+    }
+    return value?.kind === "reading" ? { kind: "reading" } : { kind: "off" };
+  }
+
+  function companionSettings(value) {
+    return {
+      playbackMode: playbackMode(value?.playbackMode),
+      boundaryDelay: boundaryDelay(value?.boundaryDelay),
+    };
+  }
+
+  function storedSettings(stored) {
+    return companionSettings(
+      stored?.[SETTINGS_KEY] ?? { playbackMode: stored?.[LEGACY_MODE_KEY] },
+    );
+  }
+
+  // One second for every 15 characters of the sentence, from 1 to 15 seconds.
+  function readingSeconds(text) {
+    const length = [...String(text ?? "").trim()].length;
+    return Math.min(15, Math.max(1, Math.round(length / 15)));
+  }
+
+  // Seconds to wait at a Sentence Boundary before the action runs. Only
+  // Continue's next sentence and Repeat's replay wait.
+  function boundaryWait(action, delay, text) {
+    if (!["next", "repeat"].includes(action)) return 0;
+    if (delay.kind === "seconds") return delay.seconds;
+    return delay.kind === "reading" ? readingSeconds(text) : 0;
+  }
+
   // Readiness is only announced. The other states ask the reader to wait or act.
   const COMPANION_STATUSES = Object.freeze({
     loading: { message: "Preparing video…", visible: true },
@@ -205,10 +248,13 @@
     return Number.isFinite(volume) ? Math.round(volume * 0.3) : null;
   }
 
-  // A selection that ends outside a Vocabulary Hold, such as one made while
-  // paused, never starts playback.
-  function holdRelease(hold, sentenceId, mode, hasNext) {
-    return hold && hold.sentence === sentenceId ? boundaryAction(mode, hasNext) : null;
+  // The action a wait at a Sentence Boundary releases into when it ends or is
+  // cut short. A Boundary Delay keeps its action, and a Vocabulary Hold runs the
+  // Playback Mode's reaction. A selection that ends outside a wait, such as one
+  // made while paused, never starts playback.
+  function waitRelease(wait, sentenceId, mode, hasNext) {
+    if (!wait || wait.sentence !== sentenceId) return null;
+    return wait.kind === "delay" ? wait.action : boundaryAction(mode, hasNext);
   }
 
   function boundaryEvent(armed, playerState, expectedPlayback = false) {
@@ -426,14 +472,18 @@
     adjacentSentence,
     bridgeCommand,
     bridgeEvent,
+    LEGACY_MODE_KEY,
+    SETTINGS_KEY,
     boundaryAction,
+    boundaryDelay,
     boundaryEvent,
+    boundaryWait,
     claimShortcut,
+    companionSettings,
     companionStatus,
     cueCommand,
     duckedVolume,
     explicitPlayback,
-    holdRelease,
     initialCue,
     layoutAction,
     lifecycleAction,
@@ -444,11 +494,14 @@
     playbackMode,
     playbackStatus,
     readerLesson,
+    readingSeconds,
     segmentTransition,
     seekTarget,
     sentenceAtTime,
     sentenceResponse,
     shortcutAction,
+    storedSettings,
+    waitRelease,
     wordAudio,
     youtubeEmbedId,
   });

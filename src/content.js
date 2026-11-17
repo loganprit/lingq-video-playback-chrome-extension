@@ -629,7 +629,7 @@
   const selectionWatch = new MutationObserver(() => {
     const context = readerContext();
     if (!state.hold || selectionOpen(context)) return;
-    const action = core.holdRelease(
+    const action = core.waitRelease(
       state.hold,
       context?.sentence.id,
       state.mode,
@@ -663,7 +663,7 @@
       selectionOpen(context),
     );
     if (action === "hold") {
-      state.hold = { sentence: context.sentence.id };
+      state.hold = { kind: "hold", sentence: context.sentence.id };
       selectionWatch.observe(document.documentElement, {
         attributes: true,
         attributeFilter: ["class"],
@@ -683,7 +683,7 @@
     if (!state.ready || !state.segment) return;
     // Play during a hold in Continue moves on rather than replay the sentence.
     const context = readerContext();
-    const release = core.holdRelease(
+    const release = core.waitRelease(
       state.hold,
       context?.sentence.id,
       state.mode,
