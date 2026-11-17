@@ -7,8 +7,18 @@
 
   const EMBED_ORIGINS = ["https://www.youtube.com", "https://www.youtube-nocookie.com"];
   const EMBED_EVENTS = ["onStateChange", "onError", "onAutoplayBlocked"];
+  const DUCK_LIMIT_MS = 10000;
+  const ECHO_LIMIT_MS = 1000;
+  // The video keeps playing while it buffers, so a word spoken then is ducked too.
+  const AUDIBLE_STATES = [core.PLAYER_STATES.PLAYING, core.PLAYER_STATES.BUFFERING];
 
   let activeSegment = null;
+  // null, or the video's volume lowered while LingQ reads words aloud:
+  // { player, volume, lowered, clips, timer }.
+  let duck = null;
+  let restored = null;
+  const watchedClips = new WeakSet();
+  const latestPlay = new WeakMap();
   let boundaryTimer = null;
   let frame = null;
   let generation = 0;
@@ -31,6 +41,86 @@
       if (id) return candidate;
     }
     return null;
+  }
+
+  // The YT player's getVolume reads a copy the embed updates a few ms after
+  // each setVolume, so the bridge remembers its last restore until the copy
+  // catches up. Otherwise a word that starts right after another ends would
+  // take the lowered volume as the video's own.
+  function videoVolume() {
+    const volume = player.getVolume?.();
+    const lagging =
+      restored?.player === player &&
+      volume === restored.lowered &&
+      Date.now() - restored.at < ECHO_LIMIT_MS;
+    if (lagging) return restored.volume;
+    restored = null;
+    return volume;
+  }
+
+  function restoreVolume() {
+    if (!duck) return;
+    const { player: ducked, volume, lowered, timer } = duck;
+    clearTimeout(timer);
+    duck = null;
+    restored = { player: ducked, volume, lowered, at: Date.now() };
+    try {
+      ducked.setVolume(volume);
+    } catch {
+      // A destroyed player has no volume to restore.
+    }
+  }
+
+  // LingQ may reuse an Audio element, and changing its source fires pause and
+  // emptied after play() has started the next word, so only a clip that has
+  // stopped ends the duck.
+  function clipEnded(clip, stopped = clip.paused) {
+    if (stopped && duck?.clips.delete(clip) && !duck.clips.size) restoreVolume();
+  }
+
+  // While LingQ reads a selected word aloud, the video plays quieter so the
+  // two don't talk over each other (#36).
+  function duckFor(clip, started) {
+    if (!ready || !core.wordAudio(clip.src || clip.currentSrc)) return;
+    if (!duck) {
+      if (!AUDIBLE_STATES.includes(player.getPlayerState?.())) return;
+      const volume = videoVolume();
+      const lowered = core.duckedVolume(volume);
+      if (lowered === null) return;
+      player.setVolume(lowered);
+      duck = { player, volume, lowered, clips: new Set(), timer: null };
+    }
+    // A clip whose source stalls without an error never ends.
+    clearTimeout(duck.timer);
+    duck.timer = setTimeout(restoreVolume, DUCK_LIMIT_MS);
+    duck.clips.add(clip);
+    if (!watchedClips.has(clip)) {
+      watchedClips.add(clip);
+      for (const type of ["ended", "pause", "emptied"]) {
+        clip.addEventListener(type, () => clipEnded(clip));
+      }
+      clip.addEventListener("error", () => clipEnded(clip, true));
+    }
+    // Starting a new source aborts the clip's previous play(), which isn't an end.
+    latestPlay.set(clip, started);
+    Promise.resolve(started).catch(() => {
+      if (latestPlay.get(clip) === started) clipEnded(clip, true);
+    });
+  }
+
+  // LingQ plays word audio from Audio elements outside the document, whose
+  // events never reach it, so the bridge sees each clip start through play().
+  const mediaPlay = globalThis.HTMLMediaElement?.prototype.play;
+  if (mediaPlay) {
+    HTMLMediaElement.prototype.play = function play(...args) {
+      const started = mediaPlay.apply(this, args);
+      try {
+        duckFor(this, started);
+      } catch {
+        // Word audio plays at full volume rather than break LingQ's playback.
+      }
+      return started;
+    };
   }
 
   function stopBoundaryWatcher() {
@@ -257,6 +347,7 @@
     }
 
     stopBoundaryWatcher();
+    restoreVolume();
     activeSegment = null;
     frame = found;
     player = null;

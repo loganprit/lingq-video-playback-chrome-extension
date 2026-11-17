@@ -37,7 +37,7 @@ Anywhere else on the page, `Escape` closes the video, as it does in LingQ withou
 
 ## Vocabulary study
 
-Selecting a word or phrase doesn't pause the video. If the selection is still open when the sentence ends, the video pauses there and holds. Click off the sentence to end the selection, and the Playback Mode reacts: Continue plays the next sentence, Repeat replays it, and Pause stays paused. A selection that ends before the sentence does changes nothing, and one made while the video is paused never starts it. Play, `N`, `P`, and Replay end the hold and act at once.
+Selecting a word or phrase doesn't pause the video. If the selection is still open when the sentence ends, the video pauses there and holds. Click off the sentence to end the selection, and the Playback Mode reacts: Continue plays the next sentence, Repeat replays it, and Pause stays paused. A selection that ends before the sentence does changes nothing, and one made while the video is paused never starts it. Play, `N`, `P`, and Replay end the hold and act at once; in Continue, Play moves on to the next sentence if there is one. While LingQ reads a word aloud, the video plays at 30% of its volume.
 
 ## Install
 
