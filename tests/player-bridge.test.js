@@ -28,6 +28,18 @@ function fakePlayer({ ready }) {
     },
     becomeReady() {
       Object.assign(player, {
+        playerState: 1,
+        volume: 80,
+        volumes: [],
+        getPlayerState: () => player.playerState,
+        getVolume: () => player.volume,
+        // getVolume reads a copy the embed updates a few ms later.
+        setVolume(volume) {
+          player.volumes.push(volume);
+          player.echo = () => {
+            player.volume = volume;
+          };
+        },
         getCurrentTime: () => 12.5,
         pauseVideo() {},
         playVideo() {},
@@ -105,18 +117,47 @@ function loadBridge({ existing, get = true, frames = { widget2: existing } }) {
     ...(get ? { get: (id) => frames[id] } : {}),
   };
 
+  // An Audio element. LingQ never adds the ones it reads words with to the page.
+  class HTMLMediaElement {
+    constructor(src, started = Promise.resolve()) {
+      this.src = src;
+      this.started = started;
+      this.paused = true;
+      this.listeners = {};
+    }
+    addEventListener(type, listener) {
+      (this.listeners[type] ||= []).push(listener);
+    }
+    // A clip that ends is paused, and pause and emptied events from a source
+    // change can arrive after play() has started the next one.
+    dispatch(type, paused = ["ended", "pause"].includes(type) || this.paused) {
+      this.paused = paused;
+      for (const listener of this.listeners[type] || []) listener();
+    }
+  }
+  HTMLMediaElement.prototype.play = function play() {
+    this.paused = false;
+    return this.started;
+  };
+  const stalls = [];
+
   vm.runInNewContext(SOURCE, {
+    HTMLMediaElement,
     LingqPlaybackCore: core,
     YT,
     clearInterval() {},
     document: { querySelectorAll: () => [current] },
     location: { href: `${ORIGIN}/en/learn/es/web/reader/1`, origin: ORIGIN },
+    clearTimeout() {},
     setInterval: () => 0,
-    setTimeout: () => 0,
+    // Only the bridge's word-audio limit waits 10 s.
+    setTimeout: (callback, ms) => (ms === 10000 ? stalls.push(callback) : 0),
     window,
   });
 
   return {
+    clip: (src, started) => new HTMLMediaElement(src, started),
+    stall: () => stalls.at(-1)(),
     constructed,
     events,
     bind(generation, id) {
@@ -388,4 +429,108 @@ test("waits for the player after an announcement that comes first", () => {
   existing.becomeReady();
   existing.fire("onReady");
   assert.deepEqual(bridge.events, [core.bridgeEvent("ready", 1)]);
+});
+
+const WORD = "https://s3.amazonaws.com/media.lingq.com/resources/tts/audio/esLucia_58e5b48a.mp3";
+
+test("plays the video quieter while LingQ reads a word aloud", () => {
+  const existing = fakePlayer({ ready: true });
+  const bridge = loadBridge({ existing });
+  bridge.bind(1);
+
+  const first = bridge.clip(WORD);
+  const second = bridge.clip(WORD.replace("58e5b48a", "c5cc8138"));
+  first.play();
+  second.play();
+  assert.deepEqual(existing.volumes, [24]);
+
+  first.dispatch("ended");
+  assert.deepEqual(existing.volumes, [24]);
+  second.dispatch("pause");
+  assert.deepEqual(existing.volumes, [24, 80]);
+
+  first.play();
+  first.dispatch("ended");
+  assert.deepEqual(existing.volumes, [24, 80, 24, 80]);
+});
+
+test("leaves the volume alone for other audio and a paused or unbound video", () => {
+  const existing = fakePlayer({ ready: true });
+  const bridge = loadBridge({ existing });
+
+  bridge.clip(WORD).play();
+  bridge.bind(1);
+  bridge.clip("data:audio/mp3;base64,//MkxAAH").play();
+  bridge.clip("https://media.lingq.com/media/audionorm/lesson.mp3").play();
+  existing.playerState = core.PLAYER_STATES.PAUSED;
+  bridge.clip(WORD).play();
+
+  assert.deepEqual(existing.volumes, []);
+});
+
+test("restores the volume when a word clip can't play", async () => {
+  const existing = fakePlayer({ ready: true });
+  const bridge = loadBridge({ existing });
+  bridge.bind(1);
+
+  const refused = Promise.reject(new Error("NotAllowedError"));
+  bridge.clip(WORD, refused).play().catch(() => {});
+  assert.deepEqual(existing.volumes, [24]);
+  await refused.catch(() => {});
+  await Promise.resolve();
+  assert.deepEqual(existing.volumes, [24, 80]);
+});
+
+test("keeps the video's own volume when a word starts as another ends", () => {
+  const existing = fakePlayer({ ready: true });
+  const bridge = loadBridge({ existing });
+  bridge.bind(1);
+
+  const first = bridge.clip(WORD);
+  first.play();
+  existing.echo();
+  first.dispatch("ended");
+  bridge.clip(WORD).play();
+  existing.echo();
+
+  assert.deepEqual(existing.volumes, [24, 80, 24]);
+});
+
+test("keeps the video quiet when LingQ reuses a clip for the next word", () => {
+  const existing = fakePlayer({ ready: true });
+  const bridge = loadBridge({ existing });
+  bridge.bind(1);
+
+  const clip = bridge.clip(WORD);
+  clip.play();
+  clip.src = WORD.replace("58e5b48a", "c5cc8138");
+  clip.play();
+  clip.dispatch("pause", false);
+  clip.dispatch("emptied");
+  assert.deepEqual(existing.volumes, [24]);
+
+  clip.dispatch("ended");
+  assert.deepEqual(existing.volumes, [24, 80]);
+});
+
+test("restores the volume after a stalled clip, a rebind, or an error", () => {
+  const existing = fakePlayer({ ready: true });
+  const other = fakePlayer({ ready: true });
+  const bridge = loadBridge({ existing, frames: { widget2: existing, widget3: other } });
+  bridge.bind(1);
+
+  bridge.clip(WORD).play();
+  bridge.stall();
+  assert.deepEqual(existing.volumes, [24, 80]);
+
+  bridge.clip(WORD).play();
+  bridge.bind(2, "widget3");
+  assert.deepEqual(existing.volumes, [24, 80, 24, 80]);
+
+  existing.volumes.length = 0;
+  bridge.bind(3, "widget2");
+  const broken = bridge.clip(WORD);
+  broken.play();
+  broken.dispatch("error");
+  assert.deepEqual(existing.volumes, [24, 80]);
 });

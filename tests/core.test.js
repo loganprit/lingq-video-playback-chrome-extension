@@ -213,6 +213,23 @@ test("runs the Playback Mode's reaction when a held selection ends", () => {
   assert.equal(core.holdRelease(hold, "s11", "repeat", true), "repeat");
 });
 
+test("recognizes LingQ's spoken words among its audio", () => {
+  assert.equal(
+    core.wordAudio("https://s3.amazonaws.com/media.lingq.com/resources/tts/audio/esLucia_58e5b48a.mp3"),
+    true,
+  );
+  assert.equal(core.wordAudio("https://media.lingq.com/resources/tts/audio/x.mp3"), true);
+  assert.equal(core.wordAudio("data:audio/mp3;base64,//MkxAAH"), false);
+  assert.equal(core.wordAudio("https://evil.example/media.lingq.com/resources/tts/x.mp3"), false);
+  assert.equal(core.wordAudio(undefined), false);
+});
+
+test("lowers the video to 30% of its volume under a spoken word", () => {
+  assert.equal(core.duckedVolume(100), 30);
+  assert.equal(core.duckedVolume(55), 17);
+  assert.equal(core.duckedVolume(undefined), null);
+});
+
 test("ignores a selection that ends before the boundary or while paused", () => {
   for (const mode of ["pause", "continue", "repeat"]) {
     assert.equal(core.holdRelease(null, "s11", mode, true), null);
