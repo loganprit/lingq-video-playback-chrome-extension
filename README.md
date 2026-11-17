@@ -35,6 +35,8 @@ The Boundary Delay waits at the end of each sentence before Continue moves on or
 
 The video pauses at the end of the sentence while it waits. The Playback Mode button counts down in place, as "Next in 3 s" or "Repeat in 3 s" under a ring that empties. Play, `N`, `P`, and Replay end the wait and act at once. In Continue, Play moves on to the next sentence.
 
+If a word or phrase selection is open when the wait runs out, the video holds there as a Vocabulary Hold, and the Playback Mode acts once the selection ends, with no second wait. Changing the Playback Mode or the delay during a wait decides it again from the wait's start: Pause ends the wait and stays paused, Off acts at once, and a new mode or delay keeps the time already waited and counts down what is left. A wait whose sentence or lesson is no longer active when it runs out does nothing.
+
 ## Keyboard shortcuts
 
 | Key | Action |

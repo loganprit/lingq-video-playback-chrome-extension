@@ -119,7 +119,7 @@ Spacing uses a 4px item gap, a 24px player-to-sentence gap, and an 8px gap betwe
 
 ## Elevation & Depth
 
-Footer items are flat: transparent at rest, with a tonal hover. The Playback Mode menu, the settings panel, and the visible readiness status are the elevated surfaces. Both float over the reader, so they carry a soft shadow plus a 1px hairline ring that keeps their edges crisp in dark.
+Footer items are flat: transparent at rest, with a tonal hover. The Playback Mode menu, the settings panel, and the visible readiness status are the elevated surfaces. All three float over the reader, so they carry a soft shadow plus a 1px hairline ring that keeps their edges crisp in dark.
 
 **The Flat-by-Default Rule.** Do not add shadows, borders, or blur to in-flow controls. Only a temporary surface that overlaps other content, such as the Playback Mode menu or a visible status, is elevated.
 
@@ -149,7 +149,7 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 
 ### Boundary Delay Countdown
 
-- **Where:** while a Boundary Delay runs, the Playback Mode button's icon becomes a ring that empties as the wait runs out, and its label reads "Next in 3 s" or "Repeat in 3 s". Both share the button's stacked grid cells, so the footer never moves. In the compact footer the ring remains and the hover caption carries the text.
+- **Where:** while a Boundary Delay runs, the Playback Mode button's icon becomes a ring that empties as the wait runs out (drawn from the wait's own start and end, so a remounted footer picks up mid-wait), and its label reads "Next in 3 s" or "Repeat in 3 s". Both share the button's stacked grid cells, so the footer never moves. In the compact footer the ring remains and the hover caption carries the text.
 - **Semantics:** the button's accessible name stays "Playback Mode: <label>".
 
 ### Settings Button
@@ -174,7 +174,7 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 ### Do:
 
 - **Do** inherit LingQ typography, text color, and theme behavior.
-- **Do** reserve Playback Violet for the selected Playback Mode.
+- **Do** reserve Playback Violet for the selected choice in the menu and the settings panel.
 - **Do** keep interactive targets at least 44px and preserve visible focus.
 - **Do** validate normal, narrow, and short desktop compositions, light and dark, on the live reader.
 
