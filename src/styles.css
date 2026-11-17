@@ -96,6 +96,7 @@
 
 .theme-luminosity-dark .lspc-controls,
 .theme-luminosity-dark .lspc-status {
+  color-scheme: dark;
   --lspc-accent: #8f8ff0;
   --lspc-surface: #2d3238;
   --lspc-on-surface: #e8eaed;
@@ -120,12 +121,13 @@
 }
 
 .lspc-item:hover,
-.lspc-mode-button[aria-expanded="true"] {
+.lspc-item[aria-expanded="true"] {
   background: rgb(127 127 127 / 10%);
 }
 
 .lspc-item:focus-visible,
-.lspc-menu-item:focus-visible {
+.lspc-menu-item:focus-visible,
+.lspc-choice:has(.lspc-choice-input:focus-visible) {
   outline: 2px solid Highlight;
   outline-offset: 2px;
 }
@@ -175,7 +177,7 @@
   opacity: 0.12;
 }
 
-.lspc-mode-picker {
+.lspc-picker {
   position: relative;
   display: flex;
 }
@@ -241,7 +243,8 @@
   background: rgb(127 127 127 / 10%);
 }
 
-.lspc-menu-item[aria-checked="true"] {
+.lspc-menu-item[aria-checked="true"],
+.lspc-choice:has(.lspc-choice-input:checked) {
   background: color-mix(in srgb, var(--lspc-accent) 12%, transparent);
 }
 
@@ -264,8 +267,75 @@
   visibility: hidden;
 }
 
-.lspc-menu-item[aria-checked="true"] .lspc-check {
+.lspc-menu-item[aria-checked="true"] .lspc-check,
+.lspc-choice:has(.lspc-choice-input:checked) .lspc-check {
   visibility: visible;
+}
+
+.lspc-setting-description {
+  margin: 0 10px 6px;
+  font-size: 0.75rem;
+  opacity: 0.68;
+}
+
+/* A settings choice is a menu row around a radio that stays focusable but
+   unseen. The row shows its focus and selection. */
+.lspc-choice {
+  position: relative;
+  grid-template-columns: 1fr auto 16px;
+}
+
+.lspc-choice .lspc-check {
+  grid-column: 3;
+}
+
+.lspc-choice-input {
+  position: absolute;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.lspc-seconds {
+  min-height: 32px;
+  padding: 4px 6px;
+  border: 1px solid rgb(127 127 127 / 35%);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.lspc-seconds option {
+  background: var(--lspc-surface);
+  color: var(--lspc-on-surface);
+}
+
+.lspc-seconds:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 1px;
+}
+
+/* The countdown of a running Boundary Delay: a ring that empties as the
+   wait runs out, over the seconds left. */
+.lspc-ring circle {
+  stroke-width: 1.6;
+}
+
+.lspc-ring-track {
+  opacity: 0.22;
+}
+
+.lspc-ring-left {
+  stroke-dasharray: 1;
+  transform: rotate(-90deg);
+  transform-origin: 12px 12px;
+}
+
+.lspc-countdown {
+  font-variant-numeric: tabular-nums;
 }
 
 .lspc-menu-shortcuts {
