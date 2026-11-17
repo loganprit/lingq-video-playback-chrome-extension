@@ -9,6 +9,10 @@
   const EMBED_EVENTS = ["onStateChange", "onError", "onAutoplayBlocked"];
 
   let activeSegment = null;
+  // null, or the video's volume lowered while LingQ reads words aloud:
+  // { player, volume, clips }.
+  let duck = null;
+  const watchedClips = new WeakSet();
   let boundaryTimer = null;
   let frame = null;
   let generation = 0;
@@ -31,6 +35,60 @@
       if (id) return candidate;
     }
     return null;
+  }
+
+  function restoreVolume() {
+    if (!duck) return;
+    const { player: ducked, volume } = duck;
+    duck = null;
+    try {
+      ducked.setVolume(volume);
+    } catch {
+      // A destroyed player has no volume to restore.
+    }
+  }
+
+  function clipEnded(clip) {
+    if (duck?.clips.delete(clip) && !duck.clips.size) restoreVolume();
+  }
+
+  // While LingQ reads a selected word aloud, the video plays quieter so the
+  // two don't talk over each other (#36).
+  function duckFor(clip, started) {
+    if (!ready || duck?.clips.has(clip) || !core.wordAudio(clip.currentSrc || clip.src)) {
+      return;
+    }
+    if (!duck) {
+      if (player.getPlayerState?.() !== core.PLAYER_STATES.PLAYING) return;
+      const volume = player.getVolume?.();
+      const lowered = core.duckedVolume(volume);
+      if (lowered === null) return;
+      player.setVolume(lowered);
+      duck = { player, volume, clips: new Set() };
+    }
+    duck.clips.add(clip);
+    if (!watchedClips.has(clip)) {
+      watchedClips.add(clip);
+      for (const type of ["ended", "pause", "error", "emptied"]) {
+        clip.addEventListener(type, () => clipEnded(clip));
+      }
+    }
+    Promise.resolve(started).catch(() => clipEnded(clip));
+  }
+
+  // LingQ plays word audio from Audio elements outside the document, whose
+  // events never reach it, so the bridge sees each clip start through play().
+  const mediaPlay = globalThis.HTMLMediaElement?.prototype.play;
+  if (mediaPlay) {
+    HTMLMediaElement.prototype.play = function play(...args) {
+      const started = mediaPlay.apply(this, args);
+      try {
+        duckFor(this, started);
+      } catch {
+        // Word audio plays at full volume rather than break LingQ's playback.
+      }
+      return started;
+    };
   }
 
   function stopBoundaryWatcher() {
@@ -257,6 +315,7 @@
     }
 
     stopBoundaryWatcher();
+    restoreVolume();
     activeSegment = null;
     frame = found;
     player = null;

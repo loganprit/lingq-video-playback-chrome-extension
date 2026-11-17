@@ -193,6 +193,18 @@
     return mode === "continue" && hasNext ? "next" : "stay";
   }
 
+  // LingQ reads a selected word aloud from a text-to-speech file.
+  const WORD_AUDIO = /^https:\/\/(?:s3\.amazonaws\.com\/)?media\.lingq\.com\/resources\/tts\//;
+
+  function wordAudio(src) {
+    return typeof src === "string" && WORD_AUDIO.test(src);
+  }
+
+  // The video's volume while a word is read aloud over it.
+  function duckedVolume(volume) {
+    return Number.isFinite(volume) ? Math.round(volume * 0.3) : null;
+  }
+
   // A selection that ends outside a Vocabulary Hold, such as one made while
   // paused, never starts playback.
   function holdRelease(hold, sentenceId, mode, hasNext) {
@@ -419,6 +431,7 @@
     claimShortcut,
     companionStatus,
     cueCommand,
+    duckedVolume,
     explicitPlayback,
     holdRelease,
     initialCue,
@@ -436,6 +449,7 @@
     sentenceAtTime,
     sentenceResponse,
     shortcutAction,
+    wordAudio,
     youtubeEmbedId,
   });
 });

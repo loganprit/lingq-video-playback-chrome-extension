@@ -681,7 +681,19 @@
 
   function togglePlayback() {
     if (!state.ready || !state.segment) return;
+    // Play during a hold in Continue moves on rather than replay the sentence.
+    const context = readerContext();
+    const release = core.holdRelease(
+      state.hold,
+      context?.sentence.id,
+      state.mode,
+      hasNextSentence(context),
+    );
     cancelHold();
+    if (release === "next") {
+      navigate("next");
+      return;
+    }
     const command = core.explicitPlayback(
       state.playbackQueue.at(-1)?.expectedState ?? state.playerState,
       state.playerTime,
