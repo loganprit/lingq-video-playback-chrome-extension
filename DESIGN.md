@@ -160,7 +160,7 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 
 - **Popover:** the menu's surface, radius, elevation, motion, and placement, aligned to the Settings button's right edge.
 - **Boundary Delay:** a caption heading and a one-line description over three rows styled as menu options: Off, Fixed with a 1–10 s list, and Reading time. Each row wraps a native radio that stays focusable but unseen. The selected row takes the violet tint and check, and the focused row takes the focus ring.
-- **Keyboard:** focus moves to the selected choice on open. The arrow keys choose among the radios, Tab reaches the seconds list, and Escape closes and returns focus to the button. No key pressed in the panel reaches LingQ, so Escape never also closes a word card or the video, and Space never reads the lesson aloud.
+- **Keyboard:** focus moves to the selected choice on open. The arrow keys choose among the radios, the seconds list is its own Tab stop, and Escape closes and returns focus to the button. No key pressed in the panel reaches LingQ, so Escape never also closes a word card or the video, and Space never reads the lesson aloud.
 - **Closing:** Escape, a click outside, or focus leaving the panel. Choosing keeps it open.
 
 ### Readiness Status

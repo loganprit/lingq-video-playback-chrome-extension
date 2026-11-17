@@ -19,7 +19,7 @@ The extension adds three items to LingQ's footer, styled like LingQ's own *Page 
 
 - **Replay** replays the current sentence once (Replay Now).
 - **Playback Mode** shows what happens at the end of each sentence: *Pause at end*, *Continue at end*, or *Repeat at end*. Click it, or focus it and press `Enter` or an arrow key, to open its menu. In the menu, the arrow keys, `Home`, and `End` move, `Enter` or `Space` chooses, and `Escape` closes. The menu also lists the keyboard shortcuts. The choice is saved across reloads.
-- **Settings** opens the companion's settings panel. Its first setting is the Boundary Delay. The arrow keys choose, `Tab` reaches the seconds list, and `Escape` or a click outside closes it. Keys pressed in the panel never reach LingQ, so `Escape` there doesn't also close a word card or the video.
+- **Settings** opens the companion's settings panel. Its first setting is the Boundary Delay. Focus starts on the chosen delay. The arrow keys choose, the seconds list is its own `Tab` stop, and `Escape` or a click outside closes the panel. Keys pressed in the panel never reach LingQ, so `Escape` there doesn't also close a word card or the video.
 
 The Playback Mode and the settings are saved together in one record. An older install's saved Playback Mode carries over once.
 
