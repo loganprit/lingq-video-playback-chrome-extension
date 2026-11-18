@@ -43,9 +43,11 @@ Sentence Visibility decides when the active sentence's text shows. It works with
 
 - **Always** shows it the whole time.
 - **Listen First** hides each new sentence until its first play reaches the end, then shows it. Replays keep it shown, and moving to another sentence hides that one. With the Boundary Delay Off, Continue and Repeat pause at that first end so you can read the text. Play then moves on in Continue or replays in Repeat, and `N`, `P`, and Replay act as usual. With a delay, the text shows during the wait.
-- **Show on Pause** shows it only while the video is paused. That includes Pause at end, a Vocabulary Hold, and a Boundary Delay's wait. A sentence end that moves straight on, or a sentence the companion is about to play, doesn't count, so the next sentence's text never flashes.
+- **Show on Pause** shows it only while the video is paused. That includes Pause at end, a Vocabulary Hold, a Boundary Delay's wait, and a play the browser left paused. A sentence end that moves straight on, or a sentence the companion is about to play, doesn't count, so the next sentence's text never flashes.
 
-The hidden sentence keeps its place, so nothing below it moves. Its words can't be seen, hovered, or clicked. Click where it sits to show it for the rest of that sentence. That click never reaches LingQ, so it never selects a word or creates a LingQ. LingQ's translation and its list of the sentence's saved words stay as LingQ shows them.
+If the video fails, the sentence shows under every choice.
+
+The hidden sentence keeps its place, so nothing below it moves. Its words can't be seen, hovered, or clicked. To show it for the rest of that sentence, click where it sits, or press one of LingQ's word keys: `←`, `→`, `b`, or `Shift`+`Space`. That click or key never reaches LingQ, so it never selects a word or creates a LingQ. Neither does a press that began on the hidden text, or any press in the half second after the text shows, so a click already on its way can't land on a word. LingQ's translation and its list of the sentence's saved words stay as LingQ shows them.
 
 ## Keyboard shortcuts
 
