@@ -44,7 +44,7 @@ A Sentence Visibility choice that hides the active sentence until its first play
 _Avoid_: Intensive listening
 
 **Show on Pause**:
-A Sentence Visibility choice that shows the active sentence only while playback is paused: stopped, with no play on its way. A Vocabulary Hold, a Boundary Delay, and a play that settled paused are paused. A Sentence Boundary that moves straight on is not.
+A Sentence Visibility choice that shows the active sentence only while playback is paused: stopped, with no play on its way. A Vocabulary Hold, a Boundary Delay, the end of the video, and a play that settled paused are paused. A Sentence Boundary that moves straight on is not.
 
 **Neighbor Sentences**:
 Dimmed, read-only text of the sentences that follow the active sentence. The active sentence stays LingQ's real interactive sentence.
