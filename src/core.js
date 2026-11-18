@@ -227,33 +227,35 @@
       : { action, wait };
   }
 
-  // Show on Pause counts the video as paused when it has stopped and the
-  // companion isn't about to play it. A Vocabulary Hold, a Boundary Delay, and
-  // Pause at end all stop it. A Sentence Boundary (ENDED) is passing into its
-  // reaction, so it isn't a pause.
+  // Show on Pause counts the video as paused when it isn't playing or
+  // buffering and the companion isn't about to play it. A Vocabulary Hold, a
+  // Boundary Delay, and Pause at end all stop it. At a Sentence Boundary (ENDED),
+  // Continue and Repeat start their play at once, so only a boundary that stays
+  // counts.
   function videoPaused(playerState, playPending) {
     return (
       !playPending &&
-      [PLAYER_STATES.UNSTARTED, PLAYER_STATES.PAUSED, PLAYER_STATES.CUED].includes(playerState)
+      ![PLAYER_STATES.PLAYING, PLAYER_STATES.BUFFERING].includes(playerState)
     );
   }
 
   // Whether the active sentence's text shows. listened: its first play has
   // reached the Sentence Boundary. requested: the reader clicked the hidden text
-  // or pressed one of LingQ's word keys. failed: the video can't play, so
+  // or pressed one of LingQ's word keys. selected: it holds a word or phrase
+  // selection, which LingQ can make itself. failed: the video can't play, so
   // nothing would ever show it.
-  function sentenceShown(visibility, { paused, listened, requested, failed }) {
-    if (requested || failed) return true;
+  function sentenceShown(visibility, { paused, listened, requested, selected, failed }) {
+    if (requested || selected || failed) return true;
     if (visibility === "listen-first") return listened;
     if (visibility === "show-on-pause") return paused;
     return true;
   }
 
-  // LingQ's keys that land on a word: ArrowLeft and ArrowRight step to the next
-  // word, b to the next new word, and Shift+Space opens the selected word's
-  // popup. With Auto LingQ creation on, landing on a new word saves it.
+  // The keys of LingQ's Sentence View reader that land on a word: ArrowLeft and
+  // ArrowRight step to the next word and b to the next new word, with any
+  // modifier but Shift, and Shift+Space opens the selected word's popup. With
+  // Auto LingQ creation on, landing on a new word saves it.
   function wordKey(event) {
-    if (event.altKey || event.ctrlKey || event.metaKey) return false;
     if (event.shiftKey) return event.key === " " || event.code === "Space";
     return ["ArrowLeft", "Left", "ArrowRight", "Right", "b"].includes(event.key);
   }
@@ -266,6 +268,21 @@
   function pressKept(start, { atWords, hidden, guarded, kept }) {
     const now = atWords && (hidden || guarded);
     return start ? now : kept || now;
+  }
+
+  // What the companion does with a key while the sentence is hidden or just
+  // shown. A word key LingQ would get (not typed into a field, and not in a
+  // companion popover, which handles its own keys) is kept from LingQ. A plain
+  // key's first press "reveal"s the sentence, and its other events are
+  // "consume"d. A key held with Alt, Ctrl, or Meta is only "keep"t from LingQ, so
+  // the browser still acts on it, as Alt+Left goes Back. kept: this key's press
+  // began kept.
+  function keyAction(event, { editable, popover, hidden, guarded, kept }) {
+    const start = event.type === "keydown" && !event.repeat;
+    const atWords = !editable && !popover && wordKey(event);
+    if (!pressKept(start, { atWords, hidden, guarded, kept })) return null;
+    if (event.altKey || event.ctrlKey || event.metaKey) return "keep";
+    return start && hidden ? "reveal" : "consume";
   }
 
   // A Boundary Delay at a position (lesson and sentence) that started at a time
@@ -582,6 +599,7 @@
     duckedVolume,
     explicitPlayback,
     initialCue,
+    keyAction,
     layoutAction,
     lifecycleAction,
     menuButtonKey,

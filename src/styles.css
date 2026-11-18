@@ -76,18 +76,18 @@
 
 /* Sentence Visibility hides LingQ's real sentence in place. Its words keep
    their space, but they can't be seen, hovered, selected, or clicked. */
-.lspc-reader.lspc-sentence-hidden .sentence-text .sentence {
+#lesson-reader.lspc-sentence-hidden .sentence-text .sentence {
   position: relative;
   user-select: none;
 }
 
-.lspc-reader.lspc-sentence-hidden .sentence-text .sentence,
-.lspc-reader.lspc-sentence-hidden .sentence-text .sentence * {
+#lesson-reader.lspc-sentence-hidden .sentence-text .sentence,
+#lesson-reader.lspc-sentence-hidden .sentence-text .sentence * {
   visibility: hidden !important;
   pointer-events: none !important;
 }
 
-.lspc-reader.lspc-sentence-hidden .sentence-text .sentence::after {
+#lesson-reader.lspc-sentence-hidden .sentence-text .sentence::after {
   content: "Click to show the sentence";
   position: absolute;
   inset: 0;

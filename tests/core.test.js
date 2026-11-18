@@ -842,7 +842,7 @@ test("shows the sentence by Sentence Visibility, playback, and what revealed it"
   for (const [[paused, listened, requested], expected] of cases) {
     VISIBILITIES.forEach((visibility, index) => {
       assert.equal(
-        core.sentenceShown(visibility, { paused, listened, requested, failed: false }),
+        core.sentenceShown(visibility, { paused, listened, requested, selected: false, failed: false }),
         expected[index],
         `${visibility} paused=${paused} listened=${listened} requested=${requested}`,
       );
@@ -850,10 +850,20 @@ test("shows the sentence by Sentence Visibility, playback, and what revealed it"
   }
 });
 
+test("shows a sentence that holds a word or phrase selection", () => {
+  for (const visibility of VISIBILITIES) {
+    assert.equal(
+      core.sentenceShown(visibility, { paused: false, listened: false, requested: false, selected: true, failed: false }),
+      true,
+      visibility,
+    );
+  }
+});
+
 test("shows the sentence whenever the video can't play", () => {
   for (const visibility of VISIBILITIES) {
     assert.equal(
-      core.sentenceShown(visibility, { paused: false, listened: false, requested: false, failed: true }),
+      core.sentenceShown(visibility, { paused: false, listened: false, requested: false, selected: false, failed: true }),
       true,
       visibility,
     );
@@ -862,24 +872,61 @@ test("shows the sentence whenever the video can't play", () => {
 
 const key = (key, modifiers = {}) => ({ key, code: key === " " ? "Space" : "", ...modifiers });
 
-test("recognizes LingQ's keys that land on a word", () => {
+test("recognizes LingQ's keys that land on a word, with any modifier but Shift", () => {
   for (const name of ["ArrowLeft", "ArrowRight", "Left", "Right", "b"]) {
-    assert.equal(core.wordKey(key(name)), true, name);
+    for (const modifiers of [{}, { altKey: true }, { ctrlKey: true }, { metaKey: true }]) {
+      assert.equal(core.wordKey(key(name, modifiers)), true, `${JSON.stringify(modifiers)} ${name}`);
+    }
   }
-  assert.equal(core.wordKey(key(" ", { shiftKey: true })), true, "Shift+Space");
+  for (const modifiers of [{ shiftKey: true }, { shiftKey: true, ctrlKey: true }]) {
+    assert.equal(core.wordKey(key(" ", modifiers)), true, `${JSON.stringify(modifiers)} Space`);
+  }
   for (const [name, modifiers] of [
     [" ", {}],
     ["ArrowRight", { shiftKey: true }],
+    ["ArrowLeft", { shiftKey: true, altKey: true }],
     ["ArrowUp", { shiftKey: true }],
     ["B", { shiftKey: true }],
-    ["b", { ctrlKey: true }],
-    ["ArrowLeft", { altKey: true }],
     ["ArrowDown", {}],
     ["n", {}],
     ["1", {}],
   ]) {
     assert.equal(core.wordKey(key(name, modifiers)), false, `${JSON.stringify(modifiers)} ${name}`);
   }
+});
+
+const keyEvent = (type, name, modifiers = {}) => ({ type, repeat: false, ...key(name, modifiers) });
+const act = (event, target = {}, hidden = true, guarded = false, kept = false) =>
+  core.keyAction(event, { editable: false, popover: false, hidden, guarded, kept, ...target });
+
+test("shows the hidden sentence for a plain word key and keeps it from LingQ", () => {
+  assert.equal(act(keyEvent("keydown", "ArrowRight")), "reveal");
+  assert.equal(act(keyEvent("keydown", "b")), "reveal");
+  assert.equal(act(keyEvent("keydown", " ", { shiftKey: true })), "reveal");
+  assert.equal(act(keyEvent("keyup", "ArrowRight"), {}, false, false, true), "consume");
+  assert.equal(act(keyEvent("keydown", "ArrowRight"), {}, false, true), "consume");
+});
+
+test("keeps a modified word key from LingQ but leaves it to the browser", () => {
+  assert.equal(act(keyEvent("keydown", "ArrowLeft", { altKey: true })), "keep");
+  assert.equal(act(keyEvent("keydown", "ArrowLeft", { metaKey: true })), "keep");
+  assert.equal(act(keyEvent("keydown", "b", { ctrlKey: true })), "keep");
+  assert.equal(act(keyEvent("keydown", "b", { metaKey: true }), {}, false, true), "keep");
+});
+
+test("keeps a held word key's repeats from LingQ once the text shows", () => {
+  const repeat = { ...keyEvent("keydown", "ArrowRight"), repeat: true };
+  assert.equal(act(repeat, {}, false, false, true), "consume");
+  assert.equal(act(repeat, {}, false, false, false), null);
+});
+
+test("leaves word keys to fields, the companion's popovers, and a shown sentence", () => {
+  const right = keyEvent("keydown", "ArrowRight");
+  assert.equal(act(right, { editable: true }), null);
+  assert.equal(act(right, { popover: true }), null);
+  assert.equal(act(right, {}, false, false), null);
+  assert.equal(act(keyEvent("keydown", "n")), null);
+  assert.equal(act(keyEvent("keydown", "ArrowRight", { shiftKey: true })), null);
 });
 
 const press = (start, atWords, hidden, guarded, kept = false) =>
@@ -904,11 +951,16 @@ test("lets the press's start decide for its release, click, and double click", (
 });
 
 test("counts the video paused only when it has stopped and no play is on its way", () => {
-  for (const state of [PLAYER_STATES.PAUSED, PLAYER_STATES.CUED, PLAYER_STATES.UNSTARTED]) {
+  for (const state of [
+    PLAYER_STATES.PAUSED,
+    PLAYER_STATES.CUED,
+    PLAYER_STATES.UNSTARTED,
+    PLAYER_STATES.ENDED,
+  ]) {
     assert.equal(core.videoPaused(state, false), true, `state ${state}`);
     assert.equal(core.videoPaused(state, true), false, `state ${state} with a play pending`);
   }
-  for (const state of [PLAYER_STATES.PLAYING, PLAYER_STATES.BUFFERING, PLAYER_STATES.ENDED]) {
+  for (const state of [PLAYER_STATES.PLAYING, PLAYER_STATES.BUFFERING]) {
     assert.equal(core.videoPaused(state, false), false, `state ${state}`);
   }
 });
@@ -919,11 +971,13 @@ test("shows the sentence on Show on Pause only while the video is paused", () =>
       paused: core.videoPaused(state, playPending),
       listened: true,
       requested: false,
+      selected: false,
       failed: false,
     });
   assert.equal(shown(PLAYER_STATES.PAUSED, false), true);
   assert.equal(shown(PLAYER_STATES.PLAYING, false), false);
-  assert.equal(shown(PLAYER_STATES.ENDED, false), false);
+  assert.equal(shown(PLAYER_STATES.ENDED, false), true);
+  assert.equal(shown(PLAYER_STATES.ENDED, true), false);
   assert.equal(shown(PLAYER_STATES.PAUSED, true), false);
 });
 

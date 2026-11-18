@@ -34,10 +34,12 @@
     reveal: null,
     // Presses aimed at the sentence until this time never reach LingQ.
     revealGuard: 0,
-    // Whether LingQ never saw the current pointer press, and the key whose press
-    // it never saw.
+    // Whether LingQ never saw the current pointer press, and the codes of the
+    // held keys whose presses it never saw.
     pointerKept: false,
-    keyKept: null,
+    keysKept: new Set(),
+    // Until this time, a play the companion started counts as playing.
+    playPendingUntil: 0,
     revision: 0,
     segment: null,
     sentences: null,
@@ -133,6 +135,7 @@
     state.boundaryArmed = false;
     cancelWait();
     state.reveal = null;
+    state.playPendingUntil = 0;
     state.ignoreResetUntil = 0;
     state.synchronizing = false;
     state.autoplayBlocked = false;
@@ -684,7 +687,10 @@
     );
     state.playRequest = null;
     cancelWait();
-    if (type === "seek-play") state.synchronizing = "play";
+    if (type === "seek-play") {
+      state.synchronizing = "play";
+      expectPlay();
+    }
     postBridgeCommand(
       core.bridgeCommand(type, state.generation, state.pendingCue.segment),
     );
@@ -775,6 +781,7 @@
 
     cancelWait();
     state.navigation = { from: context.sentence.id, target: `s${target}`, play: true };
+    expectPlay();
     return true;
   }
 
@@ -801,6 +808,7 @@
       target: `s${sentenceNumber}`,
       play,
     };
+    if (play) expectPlay();
     const options = {
       bubbles: true,
       buttons: 1,
@@ -824,6 +832,7 @@
     state.boundaryArmed = false;
     state.synchronizing = "play";
     state.ignoreResetUntil = Date.now() + 1000;
+    expectPlay();
     postBridgeCommand(core.bridgeCommand("seek-play", state.generation, state.segment));
   }
 
@@ -855,19 +864,23 @@
     return state.reveal;
   }
 
+  // A play the companion starts counts as playing before the video reports it,
+  // so Show on Pause never flashes the sentence it is about to play. It ends
+  // when the video plays or settles paused, or after this long without either.
+  const PLAY_PENDING_MS = 2000;
+
+  function expectPlay() {
+    state.playPendingUntil = Date.now() + PLAY_PENDING_MS;
+    setTimeout(renderVisibility, PLAY_PENDING_MS + 20);
+  }
+
   function sentenceShown(context) {
     const { listened, requested } = revealOf(context);
-    // A play the companion has sent, or a sentence it is moving to and will
-    // play, counts as playing before the video reports it, so Show on Pause
-    // never flashes the next sentence's text. A play that settled paused, as
-    // the status says, is paused.
-    const playPending =
-      state.statusKind !== "paused" &&
-      (state.synchronizing === "play" || Boolean(state.navigation?.play));
     return core.sentenceShown(state.settings.sentenceVisibility, {
-      paused: core.videoPaused(state.playerState, playPending),
+      paused: core.videoPaused(state.playerState, Date.now() < state.playPendingUntil),
       listened,
       requested,
+      selected: selectionOpen(context),
       failed: state.statusKind === "failed",
     });
   }
@@ -922,9 +935,9 @@
       kept: state.pointerKept && event.isTrusted,
     });
     if (start) state.pointerKept = kept;
-    // The press ends with its click. A double click's dblclick comes in the
-    // same task as its second click, so it still counts as that press.
-    if (state.pointerKept && ["click", "dblclick"].includes(event.type)) {
+    // The press ends with its pointerup. Its mouseup, click, and a double
+    // click's dblclick come in the same task, so they still count as the press.
+    if (state.pointerKept && event.type === "pointerup") {
       setTimeout(() => {
         state.pointerKept = false;
       }, 0);
@@ -935,28 +948,25 @@
     if (event.type === "click" && hidden) requestReveal(context);
   }
 
-  // LingQ's word keys would land on a hidden word, so they show the sentence
-  // instead and never reach LingQ.
+  // LingQ's word keys would land on a hidden word, so they never reach LingQ,
+  // and a plain one shows the sentence instead.
   function handleRevealKey(event) {
     const context = state.layout && readerContext();
-    const start = event.type === "keydown" && !event.repeat;
-    const hidden = Boolean(context) && !sentenceShown(context);
-    const kept = core.pressKept(start, {
-      atWords:
-        Boolean(context) &&
-        core.wordKey(event) &&
-        !targetKind(event.target).editable &&
-        !event.target?.closest?.(".lspc-controls"),
-      hidden,
-      guarded: Date.now() < state.revealGuard,
-      kept: state.keyKept === event.key,
-    });
-    if (start) state.keyKept = kept ? event.key : null;
-    if (event.type === "keyup" && state.keyKept === event.key) state.keyKept = null;
-    if (!kept) return;
-    event.preventDefault();
+    const action =
+      context &&
+      core.keyAction(event, {
+        editable: targetKind(event.target).editable,
+        popover: Boolean(event.target?.closest?.(".lspc-popover")),
+        hidden: !sentenceShown(context),
+        guarded: Date.now() < state.revealGuard,
+        kept: state.keysKept.has(event.code),
+      });
+    if (event.type === "keyup") state.keysKept.delete(event.code);
+    else if (action) state.keysKept.add(event.code);
+    if (!action) return;
+    if (action !== "keep") event.preventDefault();
     event.stopImmediatePropagation();
-    if (start && hidden) requestReveal(context);
+    if (action === "reveal") requestReveal(context);
   }
 
   const selectionWatch = new MutationObserver(() => {
@@ -1073,7 +1083,10 @@
 
   function sendPlayback(command) {
     if (command === "load") replayNow();
-    else postBridgeCommand(core.bridgeCommand(command, state.generation));
+    else {
+      if (command === "play") expectPlay();
+      postBridgeCommand(core.bridgeCommand(command, state.generation));
+    }
   }
 
   function togglePlayback() {
@@ -1148,6 +1161,7 @@
       // though the bridge may already have reported PLAYING for a resume. Space
       // should play, and the status should ask for Play (#7 story 40).
       state.autoplayBlocked = true;
+      state.playPendingUntil = 0;
       state.playerState = core.PLAYER_STATES.PAUSED;
       state.playbackQueue = [];
       state.boundaryArmed = false;
@@ -1159,6 +1173,7 @@
       state.playerTime = event.detail.currentTime;
       if (event.detail.state === core.PLAYER_STATES.PLAYING) {
         state.autoplayBlocked = false;
+        state.playPendingUntil = 0;
         cancelWait();
       }
       const pendingPlayback = state.playbackQueue[0];
@@ -1176,6 +1191,8 @@
         state.ready,
       );
       if (status) setStatus(status);
+      // A play that settled paused is no longer on its way.
+      if (status === "paused") state.playPendingUntil = 0;
       if (state.ignoreResetUntil) {
         if (
           Date.now() <= state.ignoreResetUntil &&
@@ -1319,13 +1336,20 @@
   );
   window.addEventListener("keydown", handleRevealKey, true);
   window.addEventListener("keyup", handleRevealKey, true);
+  window.addEventListener("blur", () => {
+    state.keysKept.clear();
+    state.pointerKept = false;
+  });
 
   // LingQ's next sentence is hidden before it paints, since observer callbacks
-  // run before rendering.
-  new MutationObserver(() => {
-    renderVisibility();
-    scheduleSync();
-  }).observe(document.documentElement, {
+  // run before rendering. A selection's class shows the sentence that holds it.
+  new MutationObserver(renderVisibility).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class"],
+    childList: true,
+    subtree: true,
+  });
+  new MutationObserver(scheduleSync).observe(document.documentElement, {
     childList: true,
     subtree: true,
   });
