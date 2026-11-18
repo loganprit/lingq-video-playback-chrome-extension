@@ -28,12 +28,16 @@
     playRequest: null,
     ready: false,
     recoveryAttemptedLessonKey: null,
-    // The active sentence's reveal: { at, listened, clicked }. listened: its
-    // first play reached the Sentence Boundary. clicked: the reader clicked its
-    // hidden text.
+    // The active sentence's reveal: { at, listened, requested }. listened: its
+    // first play reached the Sentence Boundary. requested: the reader clicked its
+    // hidden text or pressed a word key.
     reveal: null,
-    // Presses on the sentence until this time never reach LingQ.
+    // Presses aimed at the sentence until this time never reach LingQ.
     revealGuard: 0,
+    // Whether LingQ never saw the current pointer press, and the key whose press
+    // it never saw.
+    pointerKept: false,
+    keyKept: null,
     revision: 0,
     segment: null,
     sentences: null,
@@ -847,60 +851,105 @@
   // First hides it again.
   function revealOf(context) {
     const at = position(context);
-    if (state.reveal?.at !== at) state.reveal = { at, listened: false, clicked: false };
+    if (state.reveal?.at !== at) state.reveal = { at, listened: false, requested: false };
     return state.reveal;
   }
 
   function sentenceShown(context) {
-    const { listened, clicked } = revealOf(context);
+    const { listened, requested } = revealOf(context);
     // A play the companion has sent, or a sentence it is moving to and will
     // play, counts as playing before the video reports it, so Show on Pause
-    // never flashes the next sentence's text.
+    // never flashes the next sentence's text. A play that settled paused, as
+    // the status says, is paused.
     const playPending =
-      !state.autoplayBlocked &&
+      state.statusKind !== "paused" &&
       (state.synchronizing === "play" || Boolean(state.navigation?.play));
     return core.sentenceShown(state.settings.sentenceVisibility, {
       paused: core.videoPaused(state.playerState, playPending),
       listened,
-      clicked,
+      requested,
+      failed: state.statusKind === "failed",
     });
   }
 
+  // Text that just showed may lie under a press or key aimed at it while it was
+  // hidden, so presses in the next half second stay away from LingQ.
+  const REVEAL_GUARD_MS = 500;
+
   function renderVisibility() {
     const context = state.layout && readerContext();
-    if (context) {
-      state.layout.reader.classList.toggle("lspc-sentence-hidden", !sentenceShown(context));
+    if (!context) return;
+    const reader = state.layout.reader;
+    const hidden = !sentenceShown(context);
+    if (!hidden && reader.classList.contains("lspc-sentence-hidden")) {
+      state.revealGuard = Date.now() + REVEAL_GUARD_MS;
     }
+    reader.classList.toggle("lspc-sentence-hidden", hidden);
   }
 
-  // A click on the hidden sentence shows it. No part of that press reaches
-  // LingQ, so it can't select a word, and Auto LingQ creation can't save one. A
-  // press begun on hidden text stays away from LingQ even if the text shows
-  // before it ends, and so does a double click's second press.
+  function requestReveal(context) {
+    revealOf(context).requested = true;
+    renderVisibility();
+  }
+
+  // A press on the hidden sentence itself: inside its box, on it or on what
+  // lies under it, never on something that floats over it.
+  function onSentence(sentence, event) {
+    const box = sentence.getBoundingClientRect();
+    const target = event.target;
+    return (
+      event.clientX >= box.left &&
+      event.clientX <= box.right &&
+      event.clientY >= box.top &&
+      event.clientY <= box.bottom &&
+      (sentence.contains(target) ||
+        (target?.contains?.(sentence) &&
+          Boolean(sentence.closest(".reader-container")?.contains(target))))
+    );
+  }
+
+  // A click on the hidden sentence shows it. No part of a press aimed at hidden
+  // or just-shown text reaches LingQ, so it can't select a word, and Auto LingQ
+  // creation can't save one.
   function handleRevealPress(event) {
     const context = state.layout && readerContext();
-    const sentence = context?.sentence;
-    if (!sentence?.closest(".reader-container")?.contains(event.target)) return;
-    const box = sentence.getBoundingClientRect();
-    if (
-      event.clientX < box.left ||
-      event.clientX > box.right ||
-      event.clientY < box.top ||
-      event.clientY > box.bottom
-    ) {
-      return;
-    }
-    const hidden = !sentenceShown(context);
-    if (!hidden && Date.now() >= state.revealGuard) return;
+    const start = event.type === "pointerdown";
+    const hidden = Boolean(context) && !sentenceShown(context);
+    const kept = core.pressKept(start, {
+      atWords: Boolean(context) && onSentence(context.sentence, event),
+      hidden,
+      guarded: Date.now() < state.revealGuard,
+      kept: state.pointerKept,
+    });
+    if (start) state.pointerKept = kept;
+    if (!kept) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (event.type === "pointerdown" && hidden) {
-      state.revealGuard = Date.now() + 2000;
-    } else if (event.type === "click") {
-      revealOf(context).clicked = true;
-      state.revealGuard = Date.now() + 500;
-      renderVisibility();
-    }
+    if (event.type === "click" && hidden) requestReveal(context);
+  }
+
+  // LingQ's word keys would land on a hidden word, so they show the sentence
+  // instead and never reach LingQ.
+  function handleRevealKey(event) {
+    const context = state.layout && readerContext();
+    const start = event.type === "keydown" && !event.repeat;
+    const hidden = Boolean(context) && !sentenceShown(context);
+    const kept = core.pressKept(start, {
+      atWords:
+        Boolean(context) &&
+        core.wordKey(event) &&
+        !targetKind(event.target).editable &&
+        !event.target?.closest?.(".lspc-controls"),
+      hidden,
+      guarded: Date.now() < state.revealGuard,
+      kept: state.keyKept === event.key,
+    });
+    if (start) state.keyKept = kept ? event.key : null;
+    if (event.type === "keyup" && state.keyKept === event.key) state.keyKept = null;
+    if (!kept) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (start && hidden) requestReveal(context);
   }
 
   const selectionWatch = new MutationObserver(() => {
@@ -1242,9 +1291,20 @@
 
   document.addEventListener("keydown", handleShortcut, true);
   document.addEventListener("keyup", handleShortcut, true);
-  for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "dblclick"]) {
+  for (const type of [
+    "pointerdown",
+    "mousedown",
+    "pointerup",
+    "mouseup",
+    "click",
+    "dblclick",
+    "auxclick",
+    "contextmenu",
+  ]) {
     window.addEventListener(type, handleRevealPress, true);
   }
+  window.addEventListener("keydown", handleRevealKey, true);
+  window.addEventListener("keyup", handleRevealKey, true);
 
   // LingQ's next sentence is hidden before it paints, since observer callbacks
   // run before rendering.

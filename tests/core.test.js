@@ -831,7 +831,7 @@ const reveals = (visibility, mode, delay, hasNext, hidden) =>
 
 test("shows the sentence by Sentence Visibility, playback, and what revealed it", () => {
   const cases = [
-    // [paused, listened, clicked] -> [always, listen-first, show-on-pause]
+    // [paused, listened, requested] -> [always, listen-first, show-on-pause]
     [[false, false, false], [true, false, false]],
     [[true, false, false], [true, false, true]],
     [[false, true, false], [true, true, false]],
@@ -839,15 +839,68 @@ test("shows the sentence by Sentence Visibility, playback, and what revealed it"
     [[false, false, true], [true, true, true]],
     [[false, true, true], [true, true, true]],
   ];
-  for (const [[paused, listened, clicked], expected] of cases) {
+  for (const [[paused, listened, requested], expected] of cases) {
     VISIBILITIES.forEach((visibility, index) => {
       assert.equal(
-        core.sentenceShown(visibility, { paused, listened, clicked }),
+        core.sentenceShown(visibility, { paused, listened, requested, failed: false }),
         expected[index],
-        `${visibility} paused=${paused} listened=${listened} clicked=${clicked}`,
+        `${visibility} paused=${paused} listened=${listened} requested=${requested}`,
       );
     });
   }
+});
+
+test("shows the sentence whenever the video can't play", () => {
+  for (const visibility of VISIBILITIES) {
+    assert.equal(
+      core.sentenceShown(visibility, { paused: false, listened: false, requested: false, failed: true }),
+      true,
+      visibility,
+    );
+  }
+});
+
+const key = (key, modifiers = {}) => ({ key, code: key === " " ? "Space" : "", ...modifiers });
+
+test("recognizes LingQ's keys that land on a word", () => {
+  for (const name of ["ArrowLeft", "ArrowRight", "Left", "Right", "b"]) {
+    assert.equal(core.wordKey(key(name)), true, name);
+  }
+  assert.equal(core.wordKey(key(" ", { shiftKey: true })), true, "Shift+Space");
+  for (const [name, modifiers] of [
+    [" ", {}],
+    ["ArrowRight", { shiftKey: true }],
+    ["ArrowUp", { shiftKey: true }],
+    ["B", { shiftKey: true }],
+    ["b", { ctrlKey: true }],
+    ["ArrowLeft", { altKey: true }],
+    ["ArrowDown", {}],
+    ["n", {}],
+    ["1", {}],
+  ]) {
+    assert.equal(core.wordKey(key(name, modifiers)), false, `${JSON.stringify(modifiers)} ${name}`);
+  }
+});
+
+const press = (start, atWords, hidden, guarded, kept = false) =>
+  core.pressKept(start, { atWords, hidden, guarded, kept });
+
+test("keeps a press on the hidden or just-shown sentence away from LingQ", () => {
+  assert.equal(press(true, true, true, false), true);
+  assert.equal(press(true, true, false, true), true);
+  assert.equal(press(true, true, false, false), false);
+  assert.equal(press(true, false, true, true), false);
+});
+
+test("lets the press's start decide for its release, click, and double click", () => {
+  // The guard ran out between pointerdown and click: the click still stays away.
+  assert.equal(press(false, true, false, false, true), true);
+  // A press begun on hidden text and released off the sentence stays away.
+  assert.equal(press(false, false, false, false, true), true);
+  // A press that reached LingQ at its start isn't taken away halfway.
+  assert.equal(press(false, true, false, false, false), false);
+  // Its end still never reaches a hidden word.
+  assert.equal(press(false, true, true, false, false), true);
 });
 
 test("counts the video paused only when it has stopped and no play is on its way", () => {
@@ -865,7 +918,8 @@ test("shows the sentence on Show on Pause only while the video is paused", () =>
     core.sentenceShown("show-on-pause", {
       paused: core.videoPaused(state, playPending),
       listened: true,
-      clicked: false,
+      requested: false,
+      failed: false,
     });
   assert.equal(shown(PLAYER_STATES.PAUSED, false), true);
   assert.equal(shown(PLAYER_STATES.PLAYING, false), false);
@@ -939,4 +993,7 @@ test("moves on or replays when Play ends Listen First's reveal", () => {
   assert.equal(core.waitRelease(reveal, "es:1:s11", "continue", true), "next");
   assert.equal(core.waitRelease(reveal, "es:1:s11", "repeat", true), "repeat");
   assert.equal(core.waitRelease(reveal, "es:1:s12", "continue", true), null);
+  assert.equal(core.waitRelease(reveal, "es:1:s11", "pause", true), "stay");
+  assert.equal(core.waitRelease(reveal, "es:1:s11", "continue", false), "stay");
+  assert.equal(core.waitRelease(reveal, "es:1:s11", "repeat", false), "repeat");
 });

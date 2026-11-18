@@ -239,11 +239,33 @@
   }
 
   // Whether the active sentence's text shows. listened: its first play has
-  // reached the Sentence Boundary. clicked: the reader clicked its hidden text.
-  function sentenceShown(visibility, { paused, listened, clicked }) {
-    if (visibility === "listen-first") return listened || clicked;
-    if (visibility === "show-on-pause") return paused || clicked;
+  // reached the Sentence Boundary. requested: the reader clicked the hidden text
+  // or pressed one of LingQ's word keys. failed: the video can't play, so
+  // nothing would ever show it.
+  function sentenceShown(visibility, { paused, listened, requested, failed }) {
+    if (requested || failed) return true;
+    if (visibility === "listen-first") return listened;
+    if (visibility === "show-on-pause") return paused;
     return true;
+  }
+
+  // LingQ's keys that land on a word: ArrowLeft and ArrowRight step to the next
+  // word, b to the next new word, and Shift+Space opens the selected word's
+  // popup. With Auto LingQ creation on, landing on a new word saves it.
+  function wordKey(event) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return false;
+    if (event.shiftKey) return event.key === " " || event.code === "Space";
+    return ["ArrowLeft", "Left", "ArrowRight", "Right", "b"].includes(event.key);
+  }
+
+  // Whether a press stays away from LingQ: one aimed at the sentence's words
+  // (a pointer press on the sentence, or a word key) while the text is hidden or
+  // guarded just after it showed. A press's start (pointerdown, or a key's
+  // first keydown) decides for all of it, so its release, click, a double
+  // click's dblclick, and a held key's repeats stay away too once the text shows.
+  function pressKept(start, { atWords, hidden, guarded, kept }) {
+    const now = atWords && (hidden || guarded);
+    return start ? now : kept || now;
   }
 
   // A Boundary Delay at a position (lesson and sentence) that started at a time
@@ -568,6 +590,7 @@
     parseBridgeEvent,
     playbackMode,
     playbackStatus,
+    pressKept,
     readerLesson,
     readingSeconds,
     segmentTransition,
@@ -581,6 +604,7 @@
     videoPaused,
     waitRelease,
     wordAudio,
+    wordKey,
     youtubeEmbedId,
   });
 });
