@@ -177,10 +177,17 @@
     return value?.kind === "reading" ? { kind: "reading" } : { kind: "off" };
   }
 
+  const SENTENCE_VISIBILITIES = ["always", "listen-first", "show-on-pause"];
+
+  function sentenceVisibility(value) {
+    return SENTENCE_VISIBILITIES.includes(value) ? value : "always";
+  }
+
   function companionSettings(value) {
     return {
       playbackMode: playbackMode(value?.playbackMode),
       boundaryDelay: boundaryDelay(value?.boundaryDelay),
+      sentenceVisibility: sentenceVisibility(value?.sentenceVisibility),
     };
   }
 
@@ -205,10 +212,38 @@
   }
 
   // The Playback Mode's reaction at a Sentence Boundary, and the seconds the
-  // Boundary Delay waits before it.
-  function boundaryReaction(settings, hasNext, selectionOpen, text) {
+  // Boundary Delay waits before it. hidden says the sentence's text was hidden
+  // when its play reached the boundary. Listen First reveals it there, and with
+  // no Boundary Delay to read it in, Continue and Repeat "reveal": they pause
+  // until Play, which then moves on or replays.
+  function boundaryReaction(settings, hasNext, selectionOpen, text, hidden) {
     const action = boundaryAction(settings.playbackMode, hasNext, selectionOpen);
-    return { action, wait: boundaryWait(action, settings.boundaryDelay, text) };
+    const wait = boundaryWait(action, settings.boundaryDelay, text);
+    return hidden &&
+      !wait &&
+      settings.sentenceVisibility === "listen-first" &&
+      ["next", "repeat"].includes(action)
+      ? { action: "reveal", wait: 0 }
+      : { action, wait };
+  }
+
+  // Show on Pause counts the video as paused when it has stopped and the
+  // companion isn't about to play it. A Vocabulary Hold, a Boundary Delay, and
+  // Pause at end all stop it. A Sentence Boundary (ENDED) is passing into its
+  // reaction, so it isn't a pause.
+  function videoPaused(playerState, playPending) {
+    return (
+      !playPending &&
+      [PLAYER_STATES.UNSTARTED, PLAYER_STATES.PAUSED, PLAYER_STATES.CUED].includes(playerState)
+    );
+  }
+
+  // Whether the active sentence's text shows. listened: its first play has
+  // reached the Sentence Boundary. clicked: the reader clicked its hidden text.
+  function sentenceShown(visibility, { paused, listened, clicked }) {
+    if (visibility === "listen-first") return listened || clicked;
+    if (visibility === "show-on-pause") return paused || clicked;
+    return true;
   }
 
   // A Boundary Delay at a position (lesson and sentence) that started at a time
@@ -286,8 +321,8 @@
   }
 
   // The action a wait at a Sentence Boundary releases into when it ends or is
-  // cut short. A Boundary Delay keeps its action, and a Vocabulary Hold runs the
-  // Playback Mode's reaction. A selection that ends outside a wait, such as one
+  // cut short. A Boundary Delay keeps its action. A Vocabulary Hold and Listen
+  // First's reveal run the Playback Mode's reaction. A selection that ends outside a wait, such as one
   // made while paused, never starts playback.
   function waitRelease(wait, at, mode, hasNext) {
     if (!wait || !at || wait.at !== at) return null;
@@ -539,8 +574,11 @@
     seekTarget,
     sentenceAtTime,
     sentenceResponse,
+    sentenceShown,
+    sentenceVisibility,
     shortcutAction,
     storedSettings,
+    videoPaused,
     waitRelease,
     wordAudio,
     youtubeEmbedId,
