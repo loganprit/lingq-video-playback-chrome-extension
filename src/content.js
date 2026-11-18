@@ -919,9 +919,16 @@
       atWords: Boolean(context) && onSentence(context.sentence, event),
       hidden,
       guarded: Date.now() < state.revealGuard,
-      kept: state.pointerKept,
+      kept: state.pointerKept && event.isTrusted,
     });
     if (start) state.pointerKept = kept;
+    // The press ends with its click. A double click's dblclick comes in the
+    // same task as its second click, so it still counts as that press.
+    if (state.pointerKept && ["click", "dblclick"].includes(event.type)) {
+      setTimeout(() => {
+        state.pointerKept = false;
+      }, 0);
+    }
     if (!kept) return;
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -1303,6 +1310,13 @@
   ]) {
     window.addEventListener(type, handleRevealPress, true);
   }
+  window.addEventListener(
+    "pointercancel",
+    () => {
+      state.pointerKept = false;
+    },
+    true,
+  );
   window.addEventListener("keydown", handleRevealKey, true);
   window.addEventListener("keyup", handleRevealKey, true);
 
