@@ -34,7 +34,7 @@ The state in which a word or phrase selection is open when the active sentence r
 _Avoid_: Pause on interaction
 
 **Boundary Delay**:
-A setting that waits at each Sentence Boundary before Continue or Repeat acts: Off, a fixed number of seconds, or an estimated reading time for the sentence.
+A setting that waits at each Sentence Boundary before Continue or Repeat acts: Off, a fixed number of seconds, or an estimated reading time for the sentence. A Vocabulary Hold comes first, and the delay starts when it ends. A selection still open when the delay runs out becomes a Vocabulary Hold, and the Playback Mode acts when the selection ends.
 
 **Sentence Visibility**:
 A setting that decides when the active sentence's text shows: Always, Listen First, or Show on Pause. It works with every Playback Mode.

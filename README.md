@@ -15,12 +15,27 @@ The extension drives only the visible player, mainly through the YouTube IFrame 
 
 ## Footer controls
 
-The extension adds two items to LingQ's footer, styled like LingQ's own *Page View* and *Review Sentence*:
+The extension adds three items to LingQ's footer, styled like LingQ's own *Page View* and *Review Sentence*:
 
 - **Replay** replays the current sentence once (Replay Now).
 - **Playback Mode** shows what happens at the end of each sentence: *Pause at end*, *Continue at end*, or *Repeat at end*. Click it, or focus it and press `Enter` or an arrow key, to open its menu. In the menu, the arrow keys, `Home`, and `End` move, `Enter` or `Space` chooses, and `Escape` closes. The menu also lists the keyboard shortcuts. The choice is saved across reloads.
+- **Settings** opens the companion's settings panel. Its first setting is the Boundary Delay. Focus starts on the chosen delay. The arrow keys choose, the seconds list is its own `Tab` stop, and `Escape` or a click outside closes the panel. Keys pressed in the panel never reach LingQ, so `Escape` there doesn't also close a word card or the video.
+
+The Playback Mode and the settings are saved together in one record. An older install's saved Playback Mode carries over once.
 
 A short status appears just above the footer only while the video loads or when it needs you, for example to press Play after the browser blocked playback. Pausing at the end of a sentence in Pause mode shows nothing. Screen readers still hear "Video ready."
+
+## Boundary Delay
+
+The Boundary Delay waits at the end of each sentence before Continue moves on or Repeat replays. Pause ignores it.
+
+- **Off** acts at once.
+- **Fixed** waits the same 1 to 10 seconds after every sentence.
+- **Reading time** waits one second for every 15 characters of the sentence's text, from 1 to 15 seconds. The text is the one LingQ's sentence endpoint returns.
+
+The video pauses at the end of the sentence while it waits. The Playback Mode button counts down in place, as "Next in 3 s" or "Repeat in 3 s" under a ring that empties. Play, `N`, `P`, and Replay end the wait and act at once. In Continue, Play moves on to the next sentence.
+
+If a word or phrase selection is open when the wait runs out, the video holds there as a Vocabulary Hold, and the Playback Mode acts once the selection ends, with no second wait. Changing the Playback Mode or the delay during a wait decides it again from the wait's start: Pause ends the wait and stays paused, Off acts at once, and a new mode or delay keeps the time already waited and counts down what is left. A wait whose sentence or lesson is no longer active when it runs out does nothing.
 
 ## Keyboard shortcuts
 
@@ -37,7 +52,7 @@ Anywhere else on the page, `Escape` closes the video, as it does in LingQ withou
 
 ## Vocabulary study
 
-Selecting a word or phrase doesn't pause the video. If the selection is still open when the sentence ends, the video pauses there and holds. Click off the sentence to end the selection, and the Playback Mode reacts: Continue plays the next sentence, Repeat replays it, and Pause stays paused. A selection that ends before the sentence does changes nothing, and one made while the video is paused never starts it. Play, `N`, `P`, and Replay end the hold and act at once; in Continue, Play moves on to the next sentence if there is one. While LingQ reads a word aloud, the video plays at 30% of its volume.
+Selecting a word or phrase doesn't pause the video. If the selection is still open when the sentence ends, the video pauses there and holds. Click off the sentence to end the selection, and the Playback Mode reacts: Continue plays the next sentence, Repeat replays it, and Pause stays paused. A selection that ends before the sentence does changes nothing, and one made while the video is paused never starts it. Play, `N`, `P`, and Replay end the hold and act at once; in Continue, Play moves on to the next sentence if there is one. With a Boundary Delay, the hold comes first and the delay starts when the selection ends. While LingQ reads a word aloud, the video plays at 30% of its volume.
 
 ## Install
 

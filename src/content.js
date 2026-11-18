@@ -4,7 +4,6 @@
   const core = globalThis.LingqPlaybackCore;
   if (!core || window !== window.top) return;
 
-  const STORAGE_KEY = "playbackMode";
   // A play request expires when no activation cue follows it. It outlasts the
   // bridge's own waits: 20 s for the YouTube API and 20 s for the player.
   const PLAY_REQUEST_MS = 45000;
@@ -17,13 +16,10 @@
     cueKey: null,
     frame: null,
     generation: 0,
-    // null, or the Vocabulary Hold: { sentence } waiting for its selection to end.
-    hold: null,
     ignoreResetUntil: 0,
     layout: null,
     lessonKey: null,
     navigation: null,
-    mode: "pause",
     modeControl: null,
     pendingCue: null,
     playbackQueue: [],
@@ -35,11 +31,17 @@
     revision: 0,
     segment: null,
     sentences: null,
+    settings: core.companionSettings(),
     statusControl: null,
     statusKind: null,
     // false, or the state ("play" or "pause") a sent command is settling into.
     synchronizing: false,
     timer: null,
+    // null, or a wait at the Sentence Boundary of the lesson and sentence at:
+    // the Vocabulary Hold { kind: "hold", at, delayed } until its selection
+    // ends, or the Boundary Delay { kind: "delay", at, action, started, until,
+    // timer } until it runs out.
+    wait: null,
     warnings: new Set(),
   };
 
@@ -118,7 +120,7 @@
     state.cueKey = null;
     state.navigation = null;
     state.boundaryArmed = false;
-    cancelHold();
+    cancelWait();
     state.ignoreResetUntil = 0;
     state.synchronizing = false;
     state.autoplayBlocked = false;
@@ -180,7 +182,20 @@
     replay: ["M4 12a8 8 0 1 0 2.6-5.9", "M4 4v4.5h4.5", "M10.5 9.2v5.6l4.4-2.8z"],
     chevron: ["M6 9l6 6 6-6"],
     check: ["M5 12.5l4.5 4.5L19 7.5"],
+    settings: [
+      "M4 7h8",
+      "M16 7h4",
+      "M12 7a2 2 0 1 0 4 0a2 2 0 1 0-4 0",
+      "M4 17h3",
+      "M11 17h9",
+      "M7 17a2 2 0 1 0 4 0a2 2 0 1 0-4 0",
+    ],
   };
+  const DELAYS = [
+    { kind: "off", name: "Off", description: "Act as soon as the sentence ends" },
+    { kind: "seconds", name: "Fixed", description: "The same wait every sentence" },
+    { kind: "reading", name: "Reading time", description: "Longer sentences wait longer" },
+  ];
   const SHORTCUTS = [
     [["Space"], "play/pause"],
     [["P", "N"], "prev/next"],
@@ -208,20 +223,55 @@
     return svg;
   }
 
-  function renderMode() {
+  function countdown() {
+    const wait = state.wait;
+    if (wait?.kind !== "delay") return "";
+    const seconds = Math.max(1, Math.ceil((wait.until - Date.now()) / 1000));
+    return `${wait.action === "next" ? "Next" : "Repeat"} in ${seconds} s`;
+  }
+
+  // The ring empties over the Boundary Delay. It follows the wait's own times,
+  // so a ring mounted mid-wait starts where the wait is.
+  function drainRing(ring) {
+    const wait = state.wait?.kind === "delay" ? state.wait : null;
+    const id = wait ? `${wait.started}:${wait.until}` : "";
+    for (const animation of ring.getAnimations()) {
+      if (animation.id !== id) animation.cancel();
+    }
+    if (!wait || ring.getAnimations().length) return;
+    const drain = ring.animate([{ strokeDashoffset: 0 }, { strokeDashoffset: 1 }], {
+      duration: Math.max(1, wait.until - wait.started),
+      fill: "forwards",
+      id,
+    });
+    drain.currentTime = Date.now() - wait.started;
+  }
+
+  function render() {
     const control = state.modeControl;
     if (!control) return;
-    const current = MODES.find(({ mode }) => mode === state.mode);
+    const { playbackMode, boundaryDelay } = state.settings;
+    const current = MODES.find(({ mode }) => mode === playbackMode);
     const button = control.querySelector(".lspc-mode-button");
+    const left = countdown();
     button.setAttribute("aria-label", `Playback Mode: ${current.label}`);
-    button.dataset.tip = current.label;
+    button.dataset.tip = left || current.label;
+    // A running Boundary Delay takes the button's icon and label for its countdown.
+    const shown = left ? "wait" : playbackMode;
     for (const node of control.querySelectorAll("[data-mode]")) {
-      const selected = node.dataset.mode === state.mode;
       if (node.getAttribute("role") === "menuitemradio") {
-        node.setAttribute("aria-checked", String(selected));
+        node.setAttribute("aria-checked", String(node.dataset.mode === playbackMode));
       } else {
-        node.classList.toggle("lspc-current", selected);
+        node.classList.toggle("lspc-current", node.dataset.mode === shown);
       }
+    }
+    control.querySelector(".lspc-countdown .lspc-label-text").textContent = left;
+    drainRing(control.querySelector(".lspc-ring-left"));
+    for (const input of control.querySelectorAll("[name='lspc-boundary-delay']")) {
+      input.checked = input.value === boundaryDelay.kind;
+    }
+    if (boundaryDelay.kind === "seconds") {
+      control.querySelector(".lspc-seconds").value = String(boundaryDelay.seconds);
     }
   }
 
@@ -231,35 +281,35 @@
     if (event.detail > 0) document.activeElement?.blur();
   }
 
-  function menuItems() {
-    return [...(state.modeControl?.querySelectorAll("[role='menuitemradio']") || [])];
+  // A picker is a footer button and the popover it opens: the Playback Mode menu
+  // or the settings panel.
+  function setPopoverOpen(picker, open) {
+    const popover = picker?.querySelector(".lspc-popover");
+    if (!popover) return;
+    popover.hidden = !open;
+    picker.querySelector(".lspc-item").setAttribute("aria-expanded", String(open));
+    if (open) popover.querySelector("[aria-checked='true'], input:checked")?.focus();
   }
 
-  function setMenuOpen(open) {
-    const control = state.modeControl;
-    if (!control) return;
-    control.querySelector(".lspc-popover").hidden = !open;
-    control.querySelector(".lspc-mode-button").setAttribute("aria-expanded", String(open));
-    if (open) menuItems().find((item) => item.dataset.mode === state.mode)?.focus();
+  function closePopover(picker, focusButton) {
+    setPopoverOpen(picker, false);
+    if (focusButton) picker?.querySelector(".lspc-item").focus();
   }
 
-  function closeMenu(focusButton) {
-    setMenuOpen(false);
-    if (focusButton) state.modeControl?.querySelector(".lspc-mode-button").focus();
-  }
-
-  function chooseMode(mode) {
-    state.mode = mode;
-    renderMode();
-    void chrome.storage.local.set({ [STORAGE_KEY]: mode });
+  function saveSettings(change) {
+    state.settings = core.companionSettings({ ...state.settings, ...change });
+    redecideDelay();
+    render();
+    void chrome.storage.local.set({ [core.SETTINGS_KEY]: state.settings });
   }
 
   function handleMenuKey(event) {
-    const items = menuItems();
+    const picker = event.currentTarget.closest(".lspc-picker");
+    const items = [...event.currentTarget.querySelectorAll("[role='menuitemradio']")];
     const index = items.indexOf(event.target);
     const action = index < 0 ? null : core.menuKey(event, index, items.length);
     if (!action || action.type === "leave") {
-      if (action && event.type === "keydown") closeMenu(true);
+      if (action && event.type === "keydown") closePopover(picker, true);
       return;
     }
     // Every other menu key stays in the menu, so LingQ never sees it.
@@ -267,10 +317,21 @@
     event.stopPropagation();
     if (event.type !== "keydown") return;
     if (action.type === "focus") items[action.index].focus();
-    else if (action.type === "close") closeMenu(true);
+    else if (action.type === "close") closePopover(picker, true);
     else if (action.type === "choose") {
-      chooseMode(items[action.index].dataset.mode);
-      closeMenu(true);
+      saveSettings({ playbackMode: items[action.index].dataset.mode });
+      closePopover(picker, true);
+    }
+  }
+
+  // No key pressed in the settings panel reaches LingQ. Its document listener
+  // would close a word card or the video on Escape and read the lesson aloud on
+  // Space.
+  function handlePanelKey(event) {
+    event.stopPropagation();
+    if (event.type === "keydown" && event.key === "Escape") {
+      event.preventDefault();
+      closePopover(event.currentTarget.closest(".lspc-picker"), true);
     }
   }
 
@@ -303,8 +364,8 @@
       text.append(title, detail);
       item.append(icon(paths), text, icon(ICONS.check, "lspc-icon lspc-check"));
       item.addEventListener("click", (event) => {
-        chooseMode(mode);
-        closeMenu(event.detail === 0);
+        saveSettings({ playbackMode: mode });
+        closePopover(item.closest(".lspc-picker"), event.detail === 0);
         releasePointerFocus(event);
       });
       menu.append(item);
@@ -317,6 +378,114 @@
     });
     popover.append(heading, menu, shortcuts);
     return popover;
+  }
+
+  function settingsPanel() {
+    const panel = element("div", "lspc-popover");
+    panel.id = "lspc-settings";
+    panel.hidden = true;
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-label", "Settings");
+    // As in the menu, clicks on the panel's text keep focus inside it. The
+    // seconds list still opens on its own press.
+    panel.addEventListener("mousedown", (event) => {
+      if (!event.target.closest("select")) event.preventDefault();
+    });
+    panel.addEventListener("keydown", handlePanelKey);
+    panel.addEventListener("keyup", handlePanelKey);
+
+    const heading = element("div", "lspc-menu-heading", "Boundary Delay");
+    heading.id = "lspc-delay-heading";
+    const about = element(
+      "p",
+      "lspc-setting-description",
+      "Wait at the end of each sentence before Continue or Repeat.",
+    );
+    about.id = "lspc-delay-description";
+    const group = element("div", "lspc-choices");
+    group.setAttribute("role", "radiogroup");
+    group.setAttribute("aria-labelledby", heading.id);
+    group.setAttribute("aria-describedby", about.id);
+
+    const seconds = element("select", "lspc-seconds");
+    seconds.setAttribute("aria-label", "Seconds to wait");
+    for (let value = 1; value <= 10; value += 1) {
+      const option = element("option", "", `${value} s`);
+      option.value = String(value);
+      seconds.append(option);
+    }
+    seconds.value = "3";
+    seconds.addEventListener("change", () => {
+      saveSettings({ boundaryDelay: { kind: "seconds", seconds: Number(seconds.value) } });
+    });
+
+    for (const { kind, name, description } of DELAYS) {
+      const row = element("label", "lspc-menu-item lspc-choice");
+      const input = element("input", "lspc-choice-input");
+      input.type = "radio";
+      input.name = "lspc-boundary-delay";
+      input.value = kind;
+      input.setAttribute("aria-labelledby", `lspc-delay-${kind}-name`);
+      input.setAttribute("aria-describedby", `lspc-delay-${kind}-description`);
+      input.addEventListener("change", () => {
+        saveSettings({ boundaryDelay: { kind, seconds: Number(seconds.value) } });
+        input.focus();
+      });
+      const text = element("span", "lspc-menu-text");
+      const detail = element("span", "lspc-menu-description", description);
+      detail.id = `lspc-delay-${kind}-description`;
+      const title = element("span", "lspc-menu-name", name);
+      title.id = `lspc-delay-${kind}-name`;
+      text.append(title, detail);
+      row.append(input, text);
+      if (kind === "seconds") row.append(seconds);
+      row.append(icon(ICONS.check, "lspc-icon lspc-check"));
+      group.append(row);
+    }
+    panel.append(heading, about, group);
+    return panel;
+  }
+
+  function countdownRing() {
+    const ring = icon([], "lspc-icon lspc-ring");
+    ring.dataset.mode = "wait";
+    for (const className of ["lspc-ring-track", "lspc-ring-left"]) {
+      const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circle.setAttribute("class", className);
+      circle.setAttribute("cx", "12");
+      circle.setAttribute("cy", "12");
+      circle.setAttribute("r", "8.5");
+      circle.setAttribute("pathLength", "1");
+      ring.append(circle);
+    }
+    return ring;
+  }
+
+  function picker(button, popover) {
+    const node = element("div", "lspc-picker");
+    button.setAttribute("aria-expanded", "false");
+    button.addEventListener("click", (event) => {
+      const open = button.getAttribute("aria-expanded") !== "true";
+      setPopoverOpen(node, open);
+      if (!open) releasePointerFocus(event);
+    });
+    // LingQ never sees Escape or Space here. Escape would close its video, and
+    // Space would play its lesson audio.
+    const handleButtonKey = (event) => {
+      const action = core.menuButtonKey(event);
+      if (!action) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (action === "open") setPopoverOpen(node, true);
+      else if (event.key === "Escape" && event.type === "keydown") setPopoverOpen(node, false);
+    };
+    button.addEventListener("keydown", handleButtonKey);
+    button.addEventListener("keyup", handleButtonKey);
+    node.addEventListener("focusout", (event) => {
+      if (!node.contains(event.relatedTarget)) setPopoverOpen(node, false);
+    });
+    node.append(button, popover);
+    return node;
   }
 
   function footerItem(paths, label) {
@@ -347,7 +516,6 @@
     const modeButton = element("button", "lspc-item lspc-mode-button");
     modeButton.type = "button";
     modeButton.setAttribute("aria-haspopup", "menu");
-    modeButton.setAttribute("aria-expanded", "false");
     modeButton.setAttribute("aria-controls", "lspc-mode-menu");
     const glyphs = element("span", "lspc-stack");
     const labels = element("span", "lspc-stack");
@@ -363,33 +531,30 @@
       );
       labels.append(text);
     }
+    glyphs.append(countdownRing());
+    const waiting = element("span", "lspc-item-label lspc-countdown");
+    waiting.dataset.mode = "wait";
+    waiting.append(
+      element("span", "lspc-label-text"),
+      icon(ICONS.chevron, "lspc-icon lspc-chevron"),
+    );
+    labels.append(waiting);
     modeButton.append(glyphs, labels);
-    modeButton.addEventListener("click", (event) => {
-      const open = modeButton.getAttribute("aria-expanded") !== "true";
-      setMenuOpen(open);
-      if (!open) releasePointerFocus(event);
-    });
-    // LingQ never sees Escape or Space here. Escape would close its video, and
-    // Space would play its lesson audio.
-    const handleButtonKey = (event) => {
-      const action = core.menuButtonKey(event);
-      if (!action) return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (action === "open") setMenuOpen(true);
-    };
-    modeButton.addEventListener("keydown", handleButtonKey);
-    modeButton.addEventListener("keyup", handleButtonKey);
 
-    const picker = element("div", "lspc-mode-picker");
-    picker.append(modeButton, modeMenu());
-    picker.addEventListener("focusout", (event) => {
-      if (!picker.contains(event.relatedTarget)) setMenuOpen(false);
-    });
-    control.append(replay, element("span", "lspc-divider"), picker);
+    const settingsButton = footerItem(ICONS.settings, "Settings");
+    settingsButton.setAttribute("aria-haspopup", "dialog");
+    settingsButton.setAttribute("aria-controls", "lspc-settings");
+    settingsButton.dataset.tip = "Settings";
+
+    control.append(
+      replay,
+      element("span", "lspc-divider"),
+      picker(modeButton, modeMenu()),
+      picker(settingsButton, settingsPanel()),
+    );
     footer.append(control);
     state.modeControl = control;
-    renderMode();
+    render();
   }
 
   function mount({ reader, portal, footer, modal, container }) {
@@ -471,7 +636,7 @@
       Date.now(),
     );
     state.playRequest = null;
-    cancelHold();
+    cancelWait();
     if (type === "seek-play") state.synchronizing = "play";
     postBridgeCommand(
       core.bridgeCommand(type, state.generation, state.pendingCue.segment),
@@ -561,7 +726,7 @@
     const target = core.adjacentSentence(current, state.sentences?.length, direction);
     if (!state.layout || !target) return false;
 
-    cancelHold();
+    cancelWait();
     state.navigation = { from: context.sentence.id, target: `s${target}`, play: true };
     return true;
   }
@@ -608,7 +773,7 @@
 
   function replayNow() {
     if (!state.ready || !state.segment) return;
-    cancelHold();
+    cancelWait();
     state.boundaryArmed = false;
     state.synchronizing = "play";
     state.ignoreResetUntil = Date.now() + 1000;
@@ -626,22 +791,102 @@
     return Boolean(context?.sentence.querySelector(".is-selected, .selected-text"));
   }
 
+  function sentenceText(context) {
+    return state.sentences?.[Number(context?.sentence.id.slice(1)) - 1]?.text;
+  }
+
+  // Where a wait belongs: the active lesson and sentence.
+  function position(context) {
+    return context ? `${context.lesson.key}:${context.sentence.id}` : null;
+  }
+
   const selectionWatch = new MutationObserver(() => {
     const context = readerContext();
-    if (!state.hold || selectionOpen(context)) return;
-    const action = core.holdRelease(
-      state.hold,
-      context?.sentence.id,
-      state.mode,
+    const hold = state.wait;
+    if (hold?.kind !== "hold" || selectionOpen(context)) return;
+    const action = core.waitRelease(
+      hold,
+      position(context),
+      state.settings.playbackMode,
       hasNextSentence(context),
     );
-    cancelHold();
-    if (action) runBoundaryAction(action);
+    cancelWait();
+    // A hold that began when its Boundary Delay ran out has already waited.
+    if (action && hold.delayed) runBoundaryAction(action);
+    else if (action) react(context, false);
   });
 
-  function cancelHold() {
-    state.hold = null;
+  function hold(context, delayed) {
+    state.wait = { kind: "hold", at: position(context), delayed };
+    selectionWatch.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+      childList: true,
+      subtree: true,
+    });
+  }
+
+  function cancelWait() {
+    const delay = state.wait?.kind === "delay" ? state.wait : null;
+    state.wait = null;
     selectionWatch.disconnect();
+    if (!delay) return;
+    clearTimeout(delay.timer);
+    render();
+  }
+
+  function startDelay(wait) {
+    cancelWait();
+    if (!wait) return;
+    state.wait = { ...wait, timer: null };
+    tickDelay();
+  }
+
+  function tickDelay() {
+    const wait = state.wait;
+    if (wait?.kind !== "delay") return;
+    const left = wait.until - Date.now();
+    if (left > 0) {
+      render();
+      wait.timer = setTimeout(tickDelay, left % 1000 || 1000);
+      return;
+    }
+    const context = readerContext();
+    const end = core.delayEnd(wait, position(context), selectionOpen(context));
+    cancelWait();
+    if (end === "hold") hold(context, true);
+    else if (end !== "drop") runBoundaryAction(end);
+  }
+
+  // A settings change during a Boundary Delay decides the wait again.
+  function redecideDelay() {
+    if (state.wait?.kind !== "delay") return;
+    const context = readerContext();
+    startDelay(core.changedDelay(state.wait, reactionAt(context, false)));
+  }
+
+  function reactionAt(context, selection) {
+    return core.boundaryReaction(
+      state.settings,
+      hasNextSentence(context),
+      selection,
+      sentenceText(context),
+    );
+  }
+
+  // Runs the Playback Mode's reaction at the Sentence Boundary: a Vocabulary
+  // Hold while a selection is open, or the action after any Boundary Delay.
+  function react(context, selection) {
+    const reaction = reactionAt(context, selection);
+    if (reaction.action === "hold") {
+      hold(context, false);
+      runBoundaryAction("hold");
+    } else if (!reaction.wait) {
+      runBoundaryAction(reaction.action);
+    } else {
+      runBoundaryAction("stay");
+      startDelay(core.boundaryDelayWait(position(context), reaction, Date.now()));
+    }
   }
 
   function runBoundaryAction(action) {
@@ -657,21 +902,7 @@
     state.boundaryArmed = false;
     state.ignoreResetUntil = Date.now() + 1000;
     const context = readerContext();
-    const action = core.boundaryAction(
-      state.mode,
-      hasNextSentence(context),
-      selectionOpen(context),
-    );
-    if (action === "hold") {
-      state.hold = { sentence: context.sentence.id };
-      selectionWatch.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ["class"],
-        childList: true,
-        subtree: true,
-      });
-    }
-    runBoundaryAction(action);
+    react(context, selectionOpen(context));
   }
 
   function sendPlayback(command) {
@@ -681,17 +912,22 @@
 
   function togglePlayback() {
     if (!state.ready || !state.segment) return;
-    // Play during a hold in Continue moves on rather than replay the sentence.
+    // Play during a wait acts at once. In Continue it moves on rather than
+    // replay the sentence.
     const context = readerContext();
-    const release = core.holdRelease(
-      state.hold,
-      context?.sentence.id,
-      state.mode,
+    const release = core.waitRelease(
+      state.wait,
+      position(context),
+      state.settings.playbackMode,
       hasNextSentence(context),
     );
-    cancelHold();
+    cancelWait();
     if (release === "next" && navigationOwner("next")) {
       navigate("next");
+      return;
+    }
+    if (release === "repeat") {
+      replayNow();
       return;
     }
     const command = core.explicitPlayback(
@@ -757,7 +993,7 @@
       state.playerTime = event.detail.currentTime;
       if (event.detail.state === core.PLAYER_STATES.PLAYING) {
         state.autoplayBlocked = false;
-        cancelHold();
+        cancelWait();
       }
       const pendingPlayback = state.playbackQueue[0];
       if (!pendingPlayback || pendingPlayback.expectedState === event.detail.state) {
@@ -897,8 +1133,16 @@
     subtree: true,
   });
   window.addEventListener("popstate", scheduleSync);
-  void chrome.storage.local.get(STORAGE_KEY).then((stored) => {
-    state.mode = core.playbackMode(stored[STORAGE_KEY]);
-    return sync();
-  });
+  void chrome.storage.local
+    .get([core.SETTINGS_KEY, core.LEGACY_MODE_KEY])
+    .then((stored) => {
+      state.settings = core.storedSettings(stored);
+      render();
+      if (!Object.hasOwn(stored, core.SETTINGS_KEY)) {
+        void chrome.storage.local
+          .set({ [core.SETTINGS_KEY]: state.settings })
+          .then(() => chrome.storage.local.remove(core.LEGACY_MODE_KEY));
+      }
+      return sync();
+    });
 })();
