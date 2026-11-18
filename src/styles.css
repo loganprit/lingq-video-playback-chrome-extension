@@ -74,6 +74,31 @@
   max-width: 60rem;
 }
 
+/* Sentence Visibility hides LingQ's real sentence in place. Its words keep
+   their space, but they can't be seen, hovered, selected, or clicked. */
+.lspc-reader.lspc-sentence-hidden .sentence-text .sentence {
+  position: relative;
+  user-select: none;
+}
+
+.lspc-reader.lspc-sentence-hidden .sentence-text .sentence,
+.lspc-reader.lspc-sentence-hidden .sentence-text .sentence * {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.lspc-reader.lspc-sentence-hidden .sentence-text .sentence::after {
+  content: "Click to show the sentence";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  visibility: visible;
+  font-size: 0.875rem;
+  font-weight: 400;
+  opacity: 0.55;
+}
+
 .main-footer .lesson-bottom:has(> .lspc-controls, > .lspc-status) {
   position: relative;
   container-type: inline-size;
@@ -270,6 +295,18 @@
 .lspc-menu-item[aria-checked="true"] .lspc-check,
 .lspc-choice:has(.lspc-choice-input:checked) .lspc-check {
   visibility: visible;
+}
+
+/* Each settings section after the first starts under a hairline. */
+.lspc-choices + .lspc-menu-heading {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgb(127 127 127 / 18%);
+}
+
+#lspc-settings {
+  max-height: calc(100dvh - 96px);
+  overflow-y: auto;
 }
 
 .lspc-setting-description {
