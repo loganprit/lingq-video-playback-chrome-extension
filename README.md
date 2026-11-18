@@ -19,7 +19,7 @@ The extension adds three items to LingQ's footer, styled like LingQ's own *Page 
 
 - **Replay** replays the current sentence once (Replay Now).
 - **Playback Mode** shows what happens at the end of each sentence: *Pause at end*, *Continue at end*, or *Repeat at end*. Click it, or focus it and press `Enter` or an arrow key, to open its menu. In the menu, the arrow keys, `Home`, and `End` move, `Enter` or `Space` chooses, and `Escape` closes. The menu also lists the keyboard shortcuts. The choice is saved across reloads.
-- **Settings** opens the companion's settings panel. Its first setting is the Boundary Delay. Focus starts on the chosen delay. The arrow keys choose, the seconds list is its own `Tab` stop, and `Escape` or a click outside closes the panel. Keys pressed in the panel never reach LingQ, so `Escape` there doesn't also close a word card or the video.
+- **Settings** opens the companion's settings panel: the Boundary Delay, then Sentence Visibility. Focus starts on the chosen delay. The arrow keys choose, `Tab` moves from the delay to the seconds list to Sentence Visibility, and `Escape` or a click outside closes the panel. Keys pressed in the panel never reach LingQ, so `Escape` there doesn't also close a word card or the video.
 
 The Playback Mode and the settings are saved together in one record. An older install's saved Playback Mode carries over once.
 
@@ -36,6 +36,16 @@ The Boundary Delay waits at the end of each sentence before Continue moves on or
 The video pauses at the end of the sentence while it waits. The Playback Mode button counts down in place, as "Next in 3 s" or "Repeat in 3 s" under a ring that empties. Play, `N`, `P`, and Replay end the wait and act at once. In Continue, Play moves on to the next sentence.
 
 If a word or phrase selection is open when the wait runs out, the video holds there as a Vocabulary Hold, and the Playback Mode acts once the selection ends, with no second wait. Changing the Playback Mode or the delay during a wait decides it again from the wait's start: Pause ends the wait and stays paused, Off acts at once, and a new mode or delay keeps the time already waited and counts down what is left. A wait whose sentence or lesson is no longer active when it runs out does nothing.
+
+## Sentence Visibility
+
+Sentence Visibility decides when the active sentence's text shows. It works with every Playback Mode and Boundary Delay.
+
+- **Always** shows it the whole time.
+- **Listen First** hides each new sentence until its first play reaches the end, then shows it. Replays keep it shown, and moving to another sentence hides that one. With the Boundary Delay Off, Continue and Repeat pause at that first end so you can read the text. Play then moves on in Continue or replays in Repeat, and `N`, `P`, and Replay act as usual. With a delay, the text shows during the wait.
+- **Show on Pause** shows it only while the video is paused. That includes Pause at end, a Vocabulary Hold, and a Boundary Delay's wait. A sentence end that moves straight on, or a sentence the companion is about to play, doesn't count, so the next sentence's text never flashes.
+
+The hidden sentence keeps its place, so nothing below it moves. Its words can't be seen, hovered, or clicked. Click where it sits to show it for the rest of that sentence. That click never reaches LingQ, so it never selects a word or creates a LingQ. LingQ's translation and its list of the sentence's saved words stay as LingQ shows them.
 
 ## Keyboard shortcuts
 
