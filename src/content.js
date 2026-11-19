@@ -928,7 +928,14 @@
   // LingQ's translation and saved words, under the list, keep this much height.
   const RESOURCES_FLOOR = 40;
 
-  const neighborResize = new ResizeObserver(() => fitNeighbors());
+  // A fit can show or hide the reader's scrollbar, which resizes the observed
+  // sentence box. Fitting in the next frame keeps that out of the observer's
+  // own delivery, which would report a loop.
+  let fitFrame = 0;
+  const neighborResize = new ResizeObserver(() => {
+    cancelAnimationFrame(fitFrame);
+    fitFrame = requestAnimationFrame(fitNeighbors);
+  });
 
   function removeNeighbors() {
     neighborResize.disconnect();
@@ -953,7 +960,7 @@
       removeNeighbors();
       state.neighbors = element("div", "lspc-neighbors");
       wrapper.after(state.neighbors);
-      for (const box of [wrapper.parentElement, wrapper, state.layout.portal]) {
+      for (const box of [wrapper.closest(".sentence-text"), wrapper, state.layout.portal]) {
         neighborResize.observe(box);
       }
     }
