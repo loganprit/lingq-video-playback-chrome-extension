@@ -19,7 +19,7 @@ The extension adds three items to LingQ's footer, styled like LingQ's own *Page 
 
 - **Replay** replays the current sentence once (Replay Now).
 - **Playback Mode** shows what happens at the end of each sentence: *Pause at end*, *Continue at end*, or *Repeat at end*. Click it, or focus it and press `Enter` or an arrow key, to open its menu. In the menu, the arrow keys, `Home`, and `End` move, `Enter` or `Space` chooses, and `Escape` closes. The menu also lists the keyboard shortcuts. The choice is saved across reloads.
-- **Settings** opens the companion's settings panel: the Boundary Delay, then Sentence Visibility. Focus starts on the chosen delay. The arrow keys choose, `Tab` moves from the delay to the seconds list to Sentence Visibility, and `Escape` or a click outside closes the panel. Keys pressed in the panel never reach LingQ, so `Escape` there doesn't also close a word card or the video.
+- **Settings** opens the companion's settings panel: the Boundary Delay, Sentence Visibility, and Neighbor Sentences. Focus starts on the chosen delay. The arrow keys choose, `Tab` moves from the delay to the seconds list, Sentence Visibility, and Neighbor Sentences, and `Escape` or a click outside closes the panel. Keys pressed in the panel never reach LingQ, so `Escape` there doesn't also close a word card or the video.
 
 The Playback Mode and the settings are saved together in one record. An older install's saved Playback Mode carries over once.
 
@@ -47,7 +47,19 @@ Sentence Visibility decides when the active sentence's text shows. It works with
 
 Under every choice, the sentence shows if the video fails or while it holds a word or phrase selection.
 
+Neighbor Sentences hide with the sentence. Under Listen First they never show.
+
 The hidden sentence keeps its place, so nothing below it moves. Its words can't be seen, hovered, or clicked. To show it for the rest of that sentence, click where it sits, or press one of LingQ's word keys: `←`, `→`, `b`, or `Shift`+`Space`. That click or key never reaches LingQ, so it never selects a word or creates a LingQ. Neither does a press that began on the hidden text, or any press in the half second after the text shows, so a click already on its way can't land on a word. LingQ also steps words on `←`, `→`, and `b` held with `Alt`, `Ctrl`, or `Cmd`. While the text is hidden, LingQ never sees those either, but the browser still acts on them, so `Alt`+`←` still goes back. Keys typed into a field or pressed in the companion's menu and panel are left alone. LingQ's translation and its list of the sentence's saved words stay as LingQ shows them.
+
+## Neighbor Sentences
+
+Neighbor Sentences show the next three sentences under the active one, dimmed, so you can see what comes next. They're on by default. Turn them off in Settings, and every neighbor is removed from the page.
+
+- The text comes from LingQ's sentence endpoint, the request the companion already makes for timestamps. It's plain text, not LingQ's words, so it can't be hovered, selected, or saved as a LingQ. No click, press, or `Enter` on a neighbor reaches LingQ.
+- Click a neighbor, or `Tab` to it and press `Enter`, to play that sentence. The companion selects it through LingQ's own sentence navigation, as it does after a seek, and ends a Boundary Delay or Vocabulary Hold the way `N` and `P` do.
+- They follow the active sentence on `N`, `P`, a seek, Continue, and LingQ's own sentence changes. Near the lesson's end fewer show, and none after the last sentence.
+- Under Show on Pause they show only while the sentence does, and keep their place while hidden. Under Listen First they never show, because you haven't heard the sentences after this one yet.
+- The video is 4rem shorter to make room for them. Only the neighbors that fit above LingQ's *Show Translation* row show, so the video, the sentence, and the footer never move or scroll. At 660px tall or less, the video keeps its short-window size and no neighbors show.
 
 ## Keyboard shortcuts
 

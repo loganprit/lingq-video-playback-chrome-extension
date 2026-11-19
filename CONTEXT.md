@@ -47,7 +47,7 @@ _Avoid_: Intensive listening
 A Sentence Visibility choice that shows the active sentence only while playback is paused: stopped, with no play on its way. A Vocabulary Hold, a Boundary Delay, the end of the video, and a play that settled paused are paused. A Sentence Boundary that moves straight on is not.
 
 **Neighbor Sentences**:
-Dimmed, read-only text of the sentences that follow the active sentence. The active sentence stays LingQ's real interactive sentence.
+Dimmed, read-only text of the sentences that follow the active sentence. Clicking one plays that sentence. They show only while the active sentence shows, and never under Listen First, because those sentences haven't been heard yet. The active sentence stays LingQ's real interactive sentence.
 
 **Focus Mode**:
 A layout that fills the browser window with the video, the active sentence, and the companion controls, modeled on the LingQ and Migaku iOS players.
