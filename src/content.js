@@ -1006,15 +1006,17 @@
   // sentence through LingQ's direct sentence navigation.
   function handleNeighborEvent(event) {
     const neighbor = event.target?.closest?.(".lspc-neighbor");
-    if (!neighbor || neighbor.parentNode !== state.neighbors) return;
-    const key = event.type.startsWith("key");
-    if (key && event.key !== "Enter") return;
+    const action =
+      neighbor?.parentNode === state.neighbors ? core.neighborAction(event) : null;
+    if (!action) return;
     event.stopImmediatePropagation();
-    // A press leaves focus where it was and selects no text.
-    if (key || event.type === "mousedown") event.preventDefault();
-    if (event.type === "click" || (event.type === "keydown" && !event.repeat)) {
-      navigateToSentence(Number(neighbor.dataset.sentence), true);
-    }
+    // A press selects no text, and Enter makes no second click.
+    if (event.type === "mousedown" || event.type.startsWith("key")) event.preventDefault();
+    if (action !== "play") return;
+    // The press left focus where it was, maybe in the video or a field, so a
+    // click hands it back to the page and the letter shortcuts work.
+    releasePointerFocus(event);
+    navigateToSentence(Number(neighbor.dataset.sentence), true);
   }
 
   function requestReveal(context) {

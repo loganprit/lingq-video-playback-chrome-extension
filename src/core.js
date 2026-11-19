@@ -292,6 +292,18 @@
     return count;
   }
 
+  // What the companion does with an event on a Neighbor Sentence: "play" its
+  // sentence, or "keep" the event from LingQ. A press and Enter are all kept,
+  // and only a single click or a fresh Enter plays, so a double click moves one
+  // sentence. Other keys are left alone (null).
+  function neighborAction(event) {
+    const key = event.type === "keydown" || event.type === "keyup";
+    if (key && event.key !== "Enter") return null;
+    const play =
+      event.type === "keydown" ? !event.repeat : event.type === "click" && event.detail <= 1;
+    return play ? "play" : "keep";
+  }
+
   // The keys of LingQ's Sentence View reader that land on a word: ArrowLeft and
   // ArrowRight step to the next word and b to the next new word, with any
   // modifier but Shift, and Shift+Space opens the selected word's popup. With
@@ -645,6 +657,7 @@
     lifecycleAction,
     menuButtonKey,
     menuKey,
+    neighborAction,
     neighborCount,
     neighborSentences,
     parseBridgeCommand,

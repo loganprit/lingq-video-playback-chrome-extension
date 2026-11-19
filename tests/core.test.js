@@ -1131,3 +1131,21 @@ test("shows Neighbor Sentences with Always and Show on Pause but never Listen Fi
     assert.equal(core.showsNeighbors(settings(visibility, false)), false);
   }
 });
+
+test("plays a neighbor on a single click or a fresh Enter and keeps every press from LingQ", () => {
+  const event = (type, extra = {}) => ({ type, key: undefined, repeat: false, detail: 1, ...extra });
+  assert.equal(core.neighborAction(event("click")), "play");
+  assert.equal(core.neighborAction(event("click", { detail: 0 })), "play");
+  assert.equal(core.neighborAction(event("keydown", { key: "Enter" })), "play");
+  assert.equal(core.neighborAction(event("click", { detail: 2 })), "keep");
+  assert.equal(core.neighborAction(event("click", { detail: 3 })), "keep");
+  assert.equal(core.neighborAction(event("keydown", { key: "Enter", repeat: true })), "keep");
+  assert.equal(core.neighborAction(event("keyup", { key: "Enter" })), "keep");
+  for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "dblclick", "auxclick", "contextmenu"]) {
+    assert.equal(core.neighborAction(event(type)), "keep", type);
+  }
+  for (const key of [" ", "n", "r", "Tab", "ArrowRight"]) {
+    assert.equal(core.neighborAction(event("keydown", { key })), null, key);
+    assert.equal(core.neighborAction(event("keyup", { key })), null, key);
+  }
+});
