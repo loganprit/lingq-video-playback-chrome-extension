@@ -40,11 +40,11 @@ A setting that waits at each Sentence Boundary before Continue or Repeat acts: O
 A setting that decides when the active sentence's text shows: Always, Listen First, or Show on Pause. It works with every Playback Mode.
 
 **Listen First**:
-A Sentence Visibility choice that hides the active sentence until its first play reaches the Sentence Boundary, then reveals it.
+A Sentence Visibility choice that hides the active sentence until its first play reaches the Sentence Boundary, then reveals it. Replays keep it shown. With no Boundary Delay, Continue and Repeat pause at that boundary so the reveal can be read, and Play then lets them act.
 _Avoid_: Intensive listening
 
 **Show on Pause**:
-A Sentence Visibility choice that shows the active sentence only while playback is paused.
+A Sentence Visibility choice that shows the active sentence only while playback is paused: stopped, with no play on its way. A Vocabulary Hold, a Boundary Delay, the end of the video, and a play that settled paused are paused. A Sentence Boundary that moves straight on is not.
 
 **Neighbor Sentences**:
 Dimmed, read-only text of the sentences that follow the active sentence. The active sentence stays LingQ's real interactive sentence.

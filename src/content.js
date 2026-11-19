@@ -28,6 +28,18 @@
     playRequest: null,
     ready: false,
     recoveryAttemptedLessonKey: null,
+    // The active sentence's reveal: { at, listened, requested }. listened: its
+    // first play reached the Sentence Boundary. requested: the reader clicked its
+    // hidden text or pressed a word key.
+    reveal: null,
+    // Presses aimed at the sentence until this time never reach LingQ.
+    revealGuard: 0,
+    // Whether LingQ never saw the current pointer press, and the codes of the
+    // held keys whose presses it never saw.
+    pointerKept: false,
+    keysKept: new Set(),
+    // Until this time, a play the companion started counts as playing.
+    playPendingUntil: 0,
     revision: 0,
     segment: null,
     sentences: null,
@@ -39,8 +51,9 @@
     timer: null,
     // null, or a wait at the Sentence Boundary of the lesson and sentence at:
     // the Vocabulary Hold { kind: "hold", at, delayed } until its selection
-    // ends, or the Boundary Delay { kind: "delay", at, action, started, until,
-    // timer } until it runs out.
+    // ends, the Boundary Delay { kind: "delay", at, action, started, until,
+    // timer } until it runs out, or Listen First's { kind: "reveal", at } until
+    // Play.
     wait: null,
     warnings: new Set(),
   };
@@ -96,7 +109,7 @@
     if (layout) {
       layout.modal.classList.remove("lspc-player");
       layout.portal.classList.remove("lspc-portal");
-      layout.reader.classList.remove("lspc-reader");
+      layout.reader.classList.remove("lspc-reader", "lspc-sentence-hidden");
       // LingQ removes the container itself when it closes the video, so only a
       // container still in the portal goes back.
       if (layout.container.parentNode === layout.portal) {
@@ -121,6 +134,8 @@
     state.navigation = null;
     state.boundaryArmed = false;
     cancelWait();
+    state.reveal = null;
+    state.playPendingUntil = 0;
     state.ignoreResetUntil = 0;
     state.synchronizing = false;
     state.autoplayBlocked = false;
@@ -192,9 +207,22 @@
     ],
   };
   const DELAYS = [
-    { kind: "off", name: "Off", description: "Act as soon as the sentence ends" },
-    { kind: "seconds", name: "Fixed", description: "The same wait every sentence" },
-    { kind: "reading", name: "Reading time", description: "Longer sentences wait longer" },
+    { value: "off", name: "Off", description: "Act as soon as the sentence ends" },
+    { value: "seconds", name: "Fixed", description: "The same wait every sentence" },
+    { value: "reading", name: "Reading time", description: "Longer sentences wait longer" },
+  ];
+  const VISIBILITIES = [
+    { value: "always", name: "Always", description: "Show the text the whole time" },
+    {
+      value: "listen-first",
+      name: "Listen First",
+      description: "Hide it until it has played once",
+    },
+    {
+      value: "show-on-pause",
+      name: "Show on Pause",
+      description: "Show it only while the video is paused",
+    },
   ];
   const SHORTCUTS = [
     [["Space"], "play/pause"],
@@ -250,7 +278,7 @@
   function render() {
     const control = state.modeControl;
     if (!control) return;
-    const { playbackMode, boundaryDelay } = state.settings;
+    const { playbackMode, boundaryDelay, sentenceVisibility } = state.settings;
     const current = MODES.find(({ mode }) => mode === playbackMode);
     const button = control.querySelector(".lspc-mode-button");
     const left = countdown();
@@ -267,8 +295,11 @@
     }
     control.querySelector(".lspc-countdown .lspc-label-text").textContent = left;
     drainRing(control.querySelector(".lspc-ring-left"));
-    for (const input of control.querySelectorAll("[name='lspc-boundary-delay']")) {
+    for (const input of control.querySelectorAll("[name='lspc-delay']")) {
       input.checked = input.value === boundaryDelay.kind;
+    }
+    for (const input of control.querySelectorAll("[name='lspc-visibility']")) {
+      input.checked = input.value === sentenceVisibility;
     }
     if (boundaryDelay.kind === "seconds") {
       control.querySelector(".lspc-seconds").value = String(boundaryDelay.seconds);
@@ -300,6 +331,7 @@
     state.settings = core.companionSettings({ ...state.settings, ...change });
     redecideDelay();
     render();
+    renderVisibility();
     void chrome.storage.local.set({ [core.SETTINGS_KEY]: state.settings });
   }
 
@@ -380,6 +412,45 @@
     return popover;
   }
 
+  // A settings section: a caption heading and description over radio rows
+  // styled as menu options. A row's control, such as the seconds list, sits
+  // before its check.
+  function settingSection(key, heading, about, choices, choose) {
+    const title = element("div", "lspc-menu-heading", heading);
+    title.id = `lspc-${key}-heading`;
+    const description = element("p", "lspc-setting-description", about);
+    description.id = `lspc-${key}-description`;
+    const group = element("div", "lspc-choices");
+    group.setAttribute("role", "radiogroup");
+    group.setAttribute("aria-labelledby", title.id);
+    group.setAttribute("aria-describedby", description.id);
+
+    for (const { value, name, description: detail, control } of choices) {
+      const row = element("label", "lspc-menu-item lspc-choice");
+      const input = element("input", "lspc-choice-input");
+      input.type = "radio";
+      input.name = `lspc-${key}`;
+      input.value = value;
+      input.setAttribute("aria-labelledby", `lspc-${key}-${value}-name`);
+      input.setAttribute("aria-describedby", `lspc-${key}-${value}-description`);
+      input.addEventListener("change", () => {
+        choose(value);
+        input.focus();
+      });
+      const text = element("span", "lspc-menu-text");
+      const caption = element("span", "lspc-menu-description", detail);
+      caption.id = `lspc-${key}-${value}-description`;
+      const label = element("span", "lspc-menu-name", name);
+      label.id = `lspc-${key}-${value}-name`;
+      text.append(label, caption);
+      row.append(input, text);
+      if (control) row.append(control);
+      row.append(icon(ICONS.check, "lspc-icon lspc-check"));
+      group.append(row);
+    }
+    return [title, description, group];
+  }
+
   function settingsPanel() {
     const panel = element("div", "lspc-popover");
     panel.id = "lspc-settings";
@@ -394,19 +465,6 @@
     panel.addEventListener("keydown", handlePanelKey);
     panel.addEventListener("keyup", handlePanelKey);
 
-    const heading = element("div", "lspc-menu-heading", "Boundary Delay");
-    heading.id = "lspc-delay-heading";
-    const about = element(
-      "p",
-      "lspc-setting-description",
-      "Wait at the end of each sentence before Continue or Repeat.",
-    );
-    about.id = "lspc-delay-description";
-    const group = element("div", "lspc-choices");
-    group.setAttribute("role", "radiogroup");
-    group.setAttribute("aria-labelledby", heading.id);
-    group.setAttribute("aria-describedby", about.id);
-
     const seconds = element("select", "lspc-seconds");
     seconds.setAttribute("aria-label", "Seconds to wait");
     for (let value = 1; value <= 10; value += 1) {
@@ -419,30 +477,22 @@
       saveSettings({ boundaryDelay: { kind: "seconds", seconds: Number(seconds.value) } });
     });
 
-    for (const { kind, name, description } of DELAYS) {
-      const row = element("label", "lspc-menu-item lspc-choice");
-      const input = element("input", "lspc-choice-input");
-      input.type = "radio";
-      input.name = "lspc-boundary-delay";
-      input.value = kind;
-      input.setAttribute("aria-labelledby", `lspc-delay-${kind}-name`);
-      input.setAttribute("aria-describedby", `lspc-delay-${kind}-description`);
-      input.addEventListener("change", () => {
-        saveSettings({ boundaryDelay: { kind, seconds: Number(seconds.value) } });
-        input.focus();
-      });
-      const text = element("span", "lspc-menu-text");
-      const detail = element("span", "lspc-menu-description", description);
-      detail.id = `lspc-delay-${kind}-description`;
-      const title = element("span", "lspc-menu-name", name);
-      title.id = `lspc-delay-${kind}-name`;
-      text.append(title, detail);
-      row.append(input, text);
-      if (kind === "seconds") row.append(seconds);
-      row.append(icon(ICONS.check, "lspc-icon lspc-check"));
-      group.append(row);
-    }
-    panel.append(heading, about, group);
+    panel.append(
+      ...settingSection(
+        "delay",
+        "Boundary Delay",
+        "Wait at the end of each sentence before Continue or Repeat.",
+        DELAYS.map((choice) => (choice.value === "seconds" ? { ...choice, control: seconds } : choice)),
+        (kind) => saveSettings({ boundaryDelay: { kind, seconds: Number(seconds.value) } }),
+      ),
+      ...settingSection(
+        "visibility",
+        "Sentence Visibility",
+        "When the sentence's text shows. Click hidden text to show it.",
+        VISIBILITIES,
+        (sentenceVisibility) => saveSettings({ sentenceVisibility }),
+      ),
+    );
     return panel;
   }
 
@@ -572,7 +622,7 @@
     }
     if (action === "rebind" || action === "retain") {
       state.layout.portal.classList.remove("lspc-portal");
-      state.layout.reader.classList.remove("lspc-reader");
+      state.layout.reader.classList.remove("lspc-reader", "lspc-sentence-hidden");
       state.modeControl?.remove();
       state.modeControl = null;
       state.layout = { ...state.layout, ...next };
@@ -637,7 +687,10 @@
     );
     state.playRequest = null;
     cancelWait();
-    if (type === "seek-play") state.synchronizing = "play";
+    if (type === "seek-play") {
+      state.synchronizing = "play";
+      expectPlay();
+    }
     postBridgeCommand(
       core.bridgeCommand(type, state.generation, state.pendingCue.segment),
     );
@@ -728,6 +781,7 @@
 
     cancelWait();
     state.navigation = { from: context.sentence.id, target: `s${target}`, play: true };
+    expectPlay();
     return true;
   }
 
@@ -754,6 +808,7 @@
       target: `s${sentenceNumber}`,
       play,
     };
+    if (play) expectPlay();
     const options = {
       bubbles: true,
       buttons: 1,
@@ -777,6 +832,7 @@
     state.boundaryArmed = false;
     state.synchronizing = "play";
     state.ignoreResetUntil = Date.now() + 1000;
+    expectPlay();
     postBridgeCommand(core.bridgeCommand("seek-play", state.generation, state.segment));
   }
 
@@ -800,6 +856,119 @@
     return context ? `${context.lesson.key}:${context.sentence.id}` : null;
   }
 
+  // The active sentence's reveal. A new sentence starts a new one, so Listen
+  // First hides it again.
+  function revealOf(context) {
+    const at = position(context);
+    if (state.reveal?.at !== at) state.reveal = { at, listened: false, requested: false };
+    return state.reveal;
+  }
+
+  // A play the companion starts counts as playing before the video reports it,
+  // so Show on Pause never flashes the sentence it is about to play. It ends
+  // when the video plays or settles paused, or after this long without either.
+  const PLAY_PENDING_MS = 2000;
+
+  function expectPlay() {
+    state.playPendingUntil = Date.now() + PLAY_PENDING_MS;
+    setTimeout(renderVisibility, PLAY_PENDING_MS + 20);
+  }
+
+  function sentenceShown(context) {
+    const { listened, requested } = revealOf(context);
+    return core.sentenceShown(state.settings.sentenceVisibility, {
+      paused: core.videoPaused(state.playerState, Date.now() < state.playPendingUntil),
+      listened,
+      requested,
+      selected: selectionOpen(context),
+      failed: state.statusKind === "failed",
+    });
+  }
+
+  // Text that just showed may lie under a press or key aimed at it while it was
+  // hidden, so presses in the next half second stay away from LingQ.
+  const REVEAL_GUARD_MS = 500;
+
+  function renderVisibility() {
+    const context = state.layout && readerContext();
+    if (!context) return;
+    const reader = state.layout.reader;
+    const hidden = !sentenceShown(context);
+    if (!hidden && reader.classList.contains("lspc-sentence-hidden")) {
+      state.revealGuard = Date.now() + REVEAL_GUARD_MS;
+    }
+    reader.classList.toggle("lspc-sentence-hidden", hidden);
+  }
+
+  function requestReveal(context) {
+    revealOf(context).requested = true;
+    renderVisibility();
+  }
+
+  // A press on the hidden sentence itself: inside its box, on it or on what
+  // lies under it, never on something that floats over it.
+  function onSentence(sentence, event) {
+    const box = sentence.getBoundingClientRect();
+    const target = event.target;
+    return (
+      event.clientX >= box.left &&
+      event.clientX <= box.right &&
+      event.clientY >= box.top &&
+      event.clientY <= box.bottom &&
+      (sentence.contains(target) ||
+        (target?.contains?.(sentence) &&
+          Boolean(sentence.closest(".reader-container")?.contains(target))))
+    );
+  }
+
+  // A click on the hidden sentence shows it. No part of a press aimed at hidden
+  // or just-shown text reaches LingQ, so it can't select a word, and Auto LingQ
+  // creation can't save one.
+  function handleRevealPress(event) {
+    const context = state.layout && readerContext();
+    const start = event.type === "pointerdown";
+    const hidden = Boolean(context) && !sentenceShown(context);
+    const kept = core.pressKept(start, {
+      atWords: Boolean(context) && onSentence(context.sentence, event),
+      hidden,
+      guarded: Date.now() < state.revealGuard,
+      kept: state.pointerKept && event.isTrusted,
+    });
+    if (start) state.pointerKept = kept;
+    // The press ends with its pointerup. Its mouseup, click, and a double
+    // click's dblclick come in the same task, so they still count as the press.
+    if (state.pointerKept && event.type === "pointerup") {
+      setTimeout(() => {
+        state.pointerKept = false;
+      }, 0);
+    }
+    if (!kept) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (event.type === "click" && hidden) requestReveal(context);
+  }
+
+  // LingQ's word keys would land on a hidden word, so they never reach LingQ,
+  // and a plain one shows the sentence instead.
+  function handleRevealKey(event) {
+    const context = state.layout && readerContext();
+    const action =
+      context &&
+      core.keyAction(event, {
+        editable: targetKind(event.target).editable,
+        popover: Boolean(event.target?.closest?.(".lspc-popover")),
+        hidden: !sentenceShown(context),
+        guarded: Date.now() < state.revealGuard,
+        kept: state.keysKept.has(event.code),
+      });
+    if (event.type === "keyup") state.keysKept.delete(event.code);
+    else if (action) state.keysKept.add(event.code);
+    if (!action) return;
+    if (action !== "keep") event.preventDefault();
+    event.stopImmediatePropagation();
+    if (action === "reveal") requestReveal(context);
+  }
+
   const selectionWatch = new MutationObserver(() => {
     const context = readerContext();
     const hold = state.wait;
@@ -813,7 +982,7 @@
     cancelWait();
     // A hold that began when its Boundary Delay ran out has already waited.
     if (action && hold.delayed) runBoundaryAction(action);
-    else if (action) react(context, false);
+    else if (action) react(context, reactionAt(context, false));
   });
 
   function hold(context, delayed) {
@@ -871,16 +1040,20 @@
       hasNextSentence(context),
       selection,
       sentenceText(context),
+      !sentenceShown(context),
     );
   }
 
   // Runs the Playback Mode's reaction at the Sentence Boundary: a Vocabulary
-  // Hold while a selection is open, or the action after any Boundary Delay.
-  function react(context, selection) {
-    const reaction = reactionAt(context, selection);
+  // Hold while a selection is open, Listen First's pause to read what it
+  // revealed, or the action after any Boundary Delay.
+  function react(context, reaction) {
     if (reaction.action === "hold") {
       hold(context, false);
       runBoundaryAction("hold");
+    } else if (reaction.action === "reveal") {
+      state.wait = { kind: "reveal", at: position(context) };
+      runBoundaryAction("stay");
     } else if (!reaction.wait) {
       runBoundaryAction(reaction.action);
     } else {
@@ -902,12 +1075,18 @@
     state.boundaryArmed = false;
     state.ignoreResetUntil = Date.now() + 1000;
     const context = readerContext();
-    react(context, selectionOpen(context));
+    const reaction = reactionAt(context, selectionOpen(context));
+    if (context) revealOf(context).listened = true;
+    renderVisibility();
+    react(context, reaction);
   }
 
   function sendPlayback(command) {
     if (command === "load") replayNow();
-    else postBridgeCommand(core.bridgeCommand(command, state.generation));
+    else {
+      if (command === "play") expectPlay();
+      postBridgeCommand(core.bridgeCommand(command, state.generation));
+    }
   }
 
   function togglePlayback() {
@@ -964,7 +1143,7 @@
     state.timer = setTimeout(() => void sync(), 40);
   }
 
-  window.addEventListener("message", (message) => {
+  function handleBridgeMessage(message) {
     if (message.source !== window || message.origin !== location.origin) return;
     const event = core.parseBridgeEvent(message.data, state.generation);
     if (!event) return;
@@ -982,6 +1161,7 @@
       // though the bridge may already have reported PLAYING for a resume. Space
       // should play, and the status should ask for Play (#7 story 40).
       state.autoplayBlocked = true;
+      state.playPendingUntil = 0;
       state.playerState = core.PLAYER_STATES.PAUSED;
       state.playbackQueue = [];
       state.boundaryArmed = false;
@@ -993,6 +1173,7 @@
       state.playerTime = event.detail.currentTime;
       if (event.detail.state === core.PLAYER_STATES.PLAYING) {
         state.autoplayBlocked = false;
+        state.playPendingUntil = 0;
         cancelWait();
       }
       const pendingPlayback = state.playbackQueue[0];
@@ -1010,6 +1191,8 @@
         state.ready,
       );
       if (status) setStatus(status);
+      // A play that settled paused is no longer on its way.
+      if (status === "paused") state.playPendingUntil = 0;
       if (state.ignoreResetUntil) {
         if (
           Date.now() <= state.ignoreResetUntil &&
@@ -1088,6 +1271,11 @@
       return;
     }
     state.blockedFrame = null;
+  }
+
+  window.addEventListener("message", (message) => {
+    handleBridgeMessage(message);
+    renderVisibility();
   });
 
   document.addEventListener(
@@ -1127,7 +1315,40 @@
 
   document.addEventListener("keydown", handleShortcut, true);
   document.addEventListener("keyup", handleShortcut, true);
+  for (const type of [
+    "pointerdown",
+    "mousedown",
+    "pointerup",
+    "mouseup",
+    "click",
+    "dblclick",
+    "auxclick",
+    "contextmenu",
+  ]) {
+    window.addEventListener(type, handleRevealPress, true);
+  }
+  window.addEventListener(
+    "pointercancel",
+    () => {
+      state.pointerKept = false;
+    },
+    true,
+  );
+  window.addEventListener("keydown", handleRevealKey, true);
+  window.addEventListener("keyup", handleRevealKey, true);
+  window.addEventListener("blur", () => {
+    state.keysKept.clear();
+    state.pointerKept = false;
+  });
 
+  // LingQ's next sentence is hidden before it paints, since observer callbacks
+  // run before rendering. A selection's class shows the sentence that holds it.
+  new MutationObserver(renderVisibility).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class"],
+    childList: true,
+    subtree: true,
+  });
   new MutationObserver(scheduleSync).observe(document.documentElement, {
     childList: true,
     subtree: true,
@@ -1138,6 +1359,7 @@
     .then((stored) => {
       state.settings = core.storedSettings(stored);
       render();
+      renderVisibility();
       if (!Object.hasOwn(stored, core.SETTINGS_KEY)) {
         void chrome.storage.local
           .set({ [core.SETTINGS_KEY]: state.settings })

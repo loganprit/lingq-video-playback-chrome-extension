@@ -256,21 +256,37 @@ const settle = (mode, delay, hasNext, selectionOpen, text = LONG) =>
   core.boundaryReaction({ playbackMode: mode, boundaryDelay: delay }, hasNext, selectionOpen, text);
 
 test("normalizes the settings record and falls back to defaults", () => {
-  const defaults = { playbackMode: "pause", boundaryDelay: { kind: "off" } };
+  const defaults = {
+    playbackMode: "pause",
+    boundaryDelay: { kind: "off" },
+    sentenceVisibility: "always",
+  };
   assert.deepEqual(core.companionSettings(), defaults);
   assert.deepEqual(core.companionSettings("continue"), defaults);
   assert.deepEqual(
     core.companionSettings({
       playbackMode: "repeat",
       boundaryDelay: { kind: "seconds", seconds: 10, extra: true },
+      sentenceVisibility: "listen-first",
       extra: 1,
     }),
-    { playbackMode: "repeat", boundaryDelay: { kind: "seconds", seconds: 10 } },
+    {
+      playbackMode: "repeat",
+      boundaryDelay: { kind: "seconds", seconds: 10 },
+      sentenceVisibility: "listen-first",
+    },
   );
   assert.deepEqual(core.companionSettings({ boundaryDelay: { kind: "reading", seconds: 4 } }), {
     playbackMode: "pause",
     boundaryDelay: { kind: "reading" },
+    sentenceVisibility: "always",
   });
+  for (const visibility of ["always", "listen-first", "show-on-pause"]) {
+    assert.equal(core.companionSettings({ sentenceVisibility: visibility }).sentenceVisibility, visibility);
+  }
+  for (const visibility of ["Listen First", "hidden", "", null, 1]) {
+    assert.equal(core.companionSettings({ sentenceVisibility: visibility }).sentenceVisibility, "always");
+  }
   for (const seconds of [0, 11, 2.5, "3", undefined, NaN]) {
     assert.deepEqual(core.boundaryDelay({ kind: "seconds", seconds }), { kind: "off" });
   }
@@ -283,6 +299,7 @@ test("carries the old stored Playback Mode into the settings record", () => {
   assert.deepEqual(core.storedSettings({ playbackMode: "continue" }), {
     playbackMode: "continue",
     boundaryDelay: { kind: "off" },
+    sentenceVisibility: "always",
   });
   assert.deepEqual(core.storedSettings({ playbackMode: "autoplay" }).playbackMode, "pause");
   assert.deepEqual(core.storedSettings({}), core.companionSettings());
@@ -290,12 +307,25 @@ test("carries the old stored Playback Mode into the settings record", () => {
 });
 
 test("prefers a stored settings record over the old Playback Mode key", () => {
-  const settings = { playbackMode: "pause", boundaryDelay: { kind: "reading" } };
+  const settings = {
+    playbackMode: "pause",
+    boundaryDelay: { kind: "reading" },
+    sentenceVisibility: "show-on-pause",
+  };
   assert.deepEqual(core.storedSettings({ settings, playbackMode: "repeat" }), settings);
   assert.deepEqual(
     core.storedSettings({ [core.SETTINGS_KEY]: settings, [core.LEGACY_MODE_KEY]: "repeat" }),
     settings,
   );
+});
+
+test("shows the sentence Always in a stored record from before Sentence Visibility", () => {
+  const stored = { settings: { playbackMode: "continue", boundaryDelay: { kind: "seconds", seconds: 3 } } };
+  assert.deepEqual(core.storedSettings(stored), {
+    playbackMode: "continue",
+    boundaryDelay: { kind: "seconds", seconds: 3 },
+    sentenceVisibility: "always",
+  });
 });
 
 test("estimates a reading wait from the sentence text's length", () => {
@@ -786,4 +816,238 @@ test("rebinds layout owners when LingQ rerenders around the mounted player", () 
     ),
     "bind",
   );
+});
+
+const { PLAYER_STATES } = core;
+const VISIBILITIES = ["always", "listen-first", "show-on-pause"];
+const reveals = (visibility, mode, delay, hasNext, hidden) =>
+  core.boundaryReaction(
+    { playbackMode: mode, boundaryDelay: delay, sentenceVisibility: visibility },
+    hasNext,
+    false,
+    LONG,
+    hidden,
+  );
+
+test("shows the sentence by Sentence Visibility, playback, and what revealed it", () => {
+  const cases = [
+    // [paused, listened, requested] -> [always, listen-first, show-on-pause]
+    [[false, false, false], [true, false, false]],
+    [[true, false, false], [true, false, true]],
+    [[false, true, false], [true, true, false]],
+    [[true, true, false], [true, true, true]],
+    [[false, false, true], [true, true, true]],
+    [[false, true, true], [true, true, true]],
+  ];
+  for (const [[paused, listened, requested], expected] of cases) {
+    VISIBILITIES.forEach((visibility, index) => {
+      assert.equal(
+        core.sentenceShown(visibility, { paused, listened, requested, selected: false, failed: false }),
+        expected[index],
+        `${visibility} paused=${paused} listened=${listened} requested=${requested}`,
+      );
+    });
+  }
+});
+
+test("shows a sentence that holds a word or phrase selection", () => {
+  for (const visibility of VISIBILITIES) {
+    assert.equal(
+      core.sentenceShown(visibility, { paused: false, listened: false, requested: false, selected: true, failed: false }),
+      true,
+      visibility,
+    );
+  }
+});
+
+test("shows the sentence whenever the video can't play", () => {
+  for (const visibility of VISIBILITIES) {
+    assert.equal(
+      core.sentenceShown(visibility, { paused: false, listened: false, requested: false, selected: false, failed: true }),
+      true,
+      visibility,
+    );
+  }
+});
+
+const key = (key, modifiers = {}) => ({ key, code: key === " " ? "Space" : "", ...modifiers });
+
+test("recognizes LingQ's keys that land on a word, with any modifier but Shift", () => {
+  for (const name of ["ArrowLeft", "ArrowRight", "Left", "Right", "b"]) {
+    for (const modifiers of [{}, { altKey: true }, { ctrlKey: true }, { metaKey: true }]) {
+      assert.equal(core.wordKey(key(name, modifiers)), true, `${JSON.stringify(modifiers)} ${name}`);
+    }
+  }
+  for (const modifiers of [{ shiftKey: true }, { shiftKey: true, ctrlKey: true }]) {
+    assert.equal(core.wordKey(key(" ", modifiers)), true, `${JSON.stringify(modifiers)} Space`);
+  }
+  for (const [name, modifiers] of [
+    [" ", {}],
+    ["ArrowRight", { shiftKey: true }],
+    ["ArrowLeft", { shiftKey: true, altKey: true }],
+    ["ArrowUp", { shiftKey: true }],
+    ["B", { shiftKey: true }],
+    ["ArrowDown", {}],
+    ["n", {}],
+    ["1", {}],
+  ]) {
+    assert.equal(core.wordKey(key(name, modifiers)), false, `${JSON.stringify(modifiers)} ${name}`);
+  }
+});
+
+const keyEvent = (type, name, modifiers = {}) => ({ type, repeat: false, ...key(name, modifiers) });
+const act = (event, target = {}, hidden = true, guarded = false, kept = false) =>
+  core.keyAction(event, { editable: false, popover: false, hidden, guarded, kept, ...target });
+
+test("shows the hidden sentence for a plain word key and keeps it from LingQ", () => {
+  assert.equal(act(keyEvent("keydown", "ArrowRight")), "reveal");
+  assert.equal(act(keyEvent("keydown", "b")), "reveal");
+  assert.equal(act(keyEvent("keydown", " ", { shiftKey: true })), "reveal");
+  assert.equal(act(keyEvent("keyup", "ArrowRight"), {}, false, false, true), "consume");
+  assert.equal(act(keyEvent("keydown", "ArrowRight"), {}, false, true), "consume");
+});
+
+test("keeps a modified word key from LingQ but leaves it to the browser", () => {
+  assert.equal(act(keyEvent("keydown", "ArrowLeft", { altKey: true })), "keep");
+  assert.equal(act(keyEvent("keydown", "ArrowLeft", { metaKey: true })), "keep");
+  assert.equal(act(keyEvent("keydown", "b", { ctrlKey: true })), "keep");
+  assert.equal(act(keyEvent("keydown", "b", { metaKey: true }), {}, false, true), "keep");
+});
+
+test("keeps a held word key's repeats from LingQ once the text shows", () => {
+  const repeat = { ...keyEvent("keydown", "ArrowRight"), repeat: true };
+  assert.equal(act(repeat, {}, false, false, true), "consume");
+  assert.equal(act(repeat, {}, false, false, false), null);
+});
+
+test("leaves word keys to fields, the companion's popovers, and a shown sentence", () => {
+  const right = keyEvent("keydown", "ArrowRight");
+  assert.equal(act(right, { editable: true }), null);
+  assert.equal(act(right, { popover: true }), null);
+  assert.equal(act(right, {}, false, false), null);
+  assert.equal(act(keyEvent("keydown", "n")), null);
+  assert.equal(act(keyEvent("keydown", "ArrowRight", { shiftKey: true })), null);
+});
+
+const press = (start, atWords, hidden, guarded, kept = false) =>
+  core.pressKept(start, { atWords, hidden, guarded, kept });
+
+test("keeps a press on the hidden or just-shown sentence away from LingQ", () => {
+  assert.equal(press(true, true, true, false), true);
+  assert.equal(press(true, true, false, true), true);
+  assert.equal(press(true, true, false, false), false);
+  assert.equal(press(true, false, true, true), false);
+});
+
+test("lets the press's start decide for its release, click, and double click", () => {
+  // The guard ran out between pointerdown and click: the click still stays away.
+  assert.equal(press(false, true, false, false, true), true);
+  // A press begun on hidden text and released off the sentence stays away.
+  assert.equal(press(false, false, false, false, true), true);
+  // A press that reached LingQ at its start isn't taken away halfway.
+  assert.equal(press(false, true, false, false, false), false);
+  // Its end still never reaches a hidden word.
+  assert.equal(press(false, true, true, false, false), true);
+});
+
+test("counts the video paused only when it has stopped and no play is on its way", () => {
+  for (const state of [
+    PLAYER_STATES.PAUSED,
+    PLAYER_STATES.CUED,
+    PLAYER_STATES.UNSTARTED,
+    PLAYER_STATES.ENDED,
+  ]) {
+    assert.equal(core.videoPaused(state, false), true, `state ${state}`);
+    assert.equal(core.videoPaused(state, true), false, `state ${state} with a play pending`);
+  }
+  for (const state of [PLAYER_STATES.PLAYING, PLAYER_STATES.BUFFERING]) {
+    assert.equal(core.videoPaused(state, false), false, `state ${state}`);
+  }
+});
+
+test("shows the sentence on Show on Pause only while the video is paused", () => {
+  const shown = (state, playPending) =>
+    core.sentenceShown("show-on-pause", {
+      paused: core.videoPaused(state, playPending),
+      listened: true,
+      requested: false,
+      selected: false,
+      failed: false,
+    });
+  assert.equal(shown(PLAYER_STATES.PAUSED, false), true);
+  assert.equal(shown(PLAYER_STATES.PLAYING, false), false);
+  assert.equal(shown(PLAYER_STATES.ENDED, false), true);
+  assert.equal(shown(PLAYER_STATES.ENDED, true), false);
+  assert.equal(shown(PLAYER_STATES.PAUSED, true), false);
+});
+
+test("reveals the hidden sentence under Listen First at a boundary with no Boundary Delay", () => {
+  const expected = {
+    always: { pause: "stay", continue: "next", repeat: "repeat" },
+    "listen-first": { pause: "stay", continue: "reveal", repeat: "reveal" },
+    "show-on-pause": { pause: "stay", continue: "next", repeat: "repeat" },
+  };
+  for (const visibility of VISIBILITIES) {
+    for (const mode of ["pause", "continue", "repeat"]) {
+      assert.deepEqual(
+        reveals(visibility, mode, DELAYS.off, true, true),
+        { action: expected[visibility][mode], wait: 0 },
+        `${visibility} ${mode}`,
+      );
+    }
+  }
+});
+
+test("reveals the Listen First sentence during a Boundary Delay instead of pausing", () => {
+  for (const [mode, action] of [["continue", "next"], ["repeat", "repeat"]]) {
+    assert.deepEqual(reveals("listen-first", mode, DELAYS.seconds, true, true), { action, wait: 3 });
+    assert.deepEqual(reveals("listen-first", mode, DELAYS.reading, true, true), { action, wait: 12 });
+  }
+  for (const delay of Object.values(DELAYS)) {
+    assert.deepEqual(reveals("listen-first", "pause", delay, true, true), { action: "stay", wait: 0 });
+  }
+});
+
+test("replays and moves on as usual once the Listen First sentence shows", () => {
+  for (const visibility of VISIBILITIES) {
+    for (const [mode, action] of [["pause", "stay"], ["continue", "next"], ["repeat", "repeat"]]) {
+      for (const [kind, delay] of Object.entries(DELAYS)) {
+        const wait = mode === "pause" ? 0 : { off: 0, seconds: 3, reading: 12 }[kind];
+        assert.deepEqual(
+          reveals(visibility, mode, delay, true, false),
+          { action, wait },
+          `${visibility} ${mode} ${kind}`,
+        );
+      }
+    }
+  }
+});
+
+test("stays at the lesson's last sentence and holds a selection under Listen First", () => {
+  assert.deepEqual(reveals("listen-first", "continue", DELAYS.off, false, true), {
+    action: "stay",
+    wait: 0,
+  });
+  for (const mode of ["pause", "continue", "repeat"]) {
+    assert.deepEqual(
+      core.boundaryReaction(
+        { playbackMode: mode, boundaryDelay: DELAYS.off, sentenceVisibility: "listen-first" },
+        true,
+        true,
+        LONG,
+        true,
+      ),
+      { action: "hold", wait: 0 },
+    );
+  }
+});
+
+test("moves on or replays when Play ends Listen First's reveal", () => {
+  const reveal = { kind: "reveal", at: "es:1:s11" };
+  assert.equal(core.waitRelease(reveal, "es:1:s11", "continue", true), "next");
+  assert.equal(core.waitRelease(reveal, "es:1:s11", "repeat", true), "repeat");
+  assert.equal(core.waitRelease(reveal, "es:1:s12", "continue", true), null);
+  assert.equal(core.waitRelease(reveal, "es:1:s11", "pause", true), "stay");
+  assert.equal(core.waitRelease(reveal, "es:1:s11", "continue", false), "stay");
+  assert.equal(core.waitRelease(reveal, "es:1:s11", "repeat", false), "repeat");
 });

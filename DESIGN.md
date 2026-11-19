@@ -160,8 +160,14 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 
 - **Popover:** the menu's surface, radius, elevation, motion, and placement, aligned to the Settings button's right edge.
 - **Boundary Delay:** a caption heading and a one-line description over three rows styled as menu options: Off, Fixed with a 1–10 s list, and Reading time. Each row wraps a native radio that stays focusable but unseen. The selected row takes the violet tint and check, and the focused row takes the focus ring.
-- **Keyboard:** focus moves to the selected choice on open. The arrow keys choose among the radios, the seconds list is its own Tab stop, and Escape closes and returns focus to the button. No key pressed in the panel reaches LingQ, so Escape never also closes a word card or the video, and Space never reads the lesson aloud.
+- **Sentence Visibility:** the same section shape under a hairline: Always, Listen First, and Show on Pause. The panel scrolls if a short window can't fit both sections.
+- **Keyboard:** focus moves to the selected choice on open. The arrow keys choose among a section's radios, each section and the seconds list is its own Tab stop, and Escape closes and returns focus to the button. No key pressed in the panel reaches LingQ, so Escape never also closes a word card or the video, and Space never reads the lesson aloud.
 - **Closing:** Escape, a click outside, or focus leaving the panel. Choosing keeps it open.
+
+### Hidden Sentence
+
+- **Style:** while Sentence Visibility hides it, LingQ's real sentence stays in place under `visibility: hidden`, so the layout never jumps. Its words can't be hovered, selected, or clicked. A `0.875rem` caption at 55% of the text color, "Click to show the sentence", sits at its center.
+- **Reveal:** a click on the sentence's box shows it, and so does a LingQ word key (`←`, `→`, `b`, `Shift`+`Space`). A press or key that begins on the hidden text stays away from LingQ to its end, and so does every press in the half second after any reveal, so no word is selected or saved. The same keys held with `Alt`, `Ctrl`, or `Cmd` never reach LingQ either, but keep the browser's own action. Something LingQ floats over the sentence still gets its clicks. A sentence that holds a selection always shows.
 
 ### Readiness Status
 
@@ -180,6 +186,6 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 
 ### Don't:
 
-- **Don't** replace, cover, or restyle LingQ-owned sentence, vocabulary, translation, sidebar, reader, or YouTube controls.
+- **Don't** replace, cover, or restyle LingQ-owned sentence, vocabulary, translation, sidebar, reader, or YouTube controls. Sentence Visibility is the one exception: it hides the real sentence in place and adds only its caption.
 - **Don't** add cards, decorative shadows, gradients, new fonts, or extra accent colors.
 - **Don't** turn compact status or help into permanent footer clutter.

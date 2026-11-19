@@ -177,10 +177,17 @@
     return value?.kind === "reading" ? { kind: "reading" } : { kind: "off" };
   }
 
+  const SENTENCE_VISIBILITIES = ["always", "listen-first", "show-on-pause"];
+
+  function sentenceVisibility(value) {
+    return SENTENCE_VISIBILITIES.includes(value) ? value : "always";
+  }
+
   function companionSettings(value) {
     return {
       playbackMode: playbackMode(value?.playbackMode),
       boundaryDelay: boundaryDelay(value?.boundaryDelay),
+      sentenceVisibility: sentenceVisibility(value?.sentenceVisibility),
     };
   }
 
@@ -205,10 +212,77 @@
   }
 
   // The Playback Mode's reaction at a Sentence Boundary, and the seconds the
-  // Boundary Delay waits before it.
-  function boundaryReaction(settings, hasNext, selectionOpen, text) {
+  // Boundary Delay waits before it. hidden says the sentence's text was hidden
+  // when its play reached the boundary. Listen First reveals it there, and with
+  // no Boundary Delay to read it in, Continue and Repeat "reveal": they pause
+  // until Play, which then moves on or replays.
+  function boundaryReaction(settings, hasNext, selectionOpen, text, hidden) {
     const action = boundaryAction(settings.playbackMode, hasNext, selectionOpen);
-    return { action, wait: boundaryWait(action, settings.boundaryDelay, text) };
+    const wait = boundaryWait(action, settings.boundaryDelay, text);
+    return hidden &&
+      !wait &&
+      settings.sentenceVisibility === "listen-first" &&
+      ["next", "repeat"].includes(action)
+      ? { action: "reveal", wait: 0 }
+      : { action, wait };
+  }
+
+  // Show on Pause counts the video as paused when it isn't playing or
+  // buffering and the companion isn't about to play it. A Vocabulary Hold, a
+  // Boundary Delay, and Pause at end all stop it. At a Sentence Boundary (ENDED),
+  // Continue and Repeat start their play at once, so only a boundary that stays
+  // counts.
+  function videoPaused(playerState, playPending) {
+    return (
+      !playPending &&
+      ![PLAYER_STATES.PLAYING, PLAYER_STATES.BUFFERING].includes(playerState)
+    );
+  }
+
+  // Whether the active sentence's text shows. listened: its first play has
+  // reached the Sentence Boundary. requested: the reader clicked the hidden text
+  // or pressed one of LingQ's word keys. selected: it holds a word or phrase
+  // selection, which LingQ can make itself. failed: the video can't play, so
+  // nothing would ever show it.
+  function sentenceShown(visibility, { paused, listened, requested, selected, failed }) {
+    if (requested || selected || failed) return true;
+    if (visibility === "listen-first") return listened;
+    if (visibility === "show-on-pause") return paused;
+    return true;
+  }
+
+  // The keys of LingQ's Sentence View reader that land on a word: ArrowLeft and
+  // ArrowRight step to the next word and b to the next new word, with any
+  // modifier but Shift, and Shift+Space opens the selected word's popup. With
+  // Auto LingQ creation on, landing on a new word saves it.
+  function wordKey(event) {
+    if (event.shiftKey) return event.key === " " || event.code === "Space";
+    return ["ArrowLeft", "Left", "ArrowRight", "Right", "b"].includes(event.key);
+  }
+
+  // Whether a press stays away from LingQ: one aimed at the sentence's words
+  // (a pointer press on the sentence, or a word key) while the text is hidden or
+  // guarded just after it showed. A press's start (pointerdown, or a key's
+  // first keydown) decides for all of it, so its release, click, a double
+  // click's dblclick, and a held key's repeats stay away too once the text shows.
+  function pressKept(start, { atWords, hidden, guarded, kept }) {
+    const now = atWords && (hidden || guarded);
+    return start ? now : kept || now;
+  }
+
+  // What the companion does with a key while the sentence is hidden or just
+  // shown. A word key LingQ would get (not typed into a field, and not in a
+  // companion popover, which handles its own keys) is kept from LingQ. A plain
+  // key's first press "reveal"s the sentence, and its other events are
+  // "consume"d. A key held with Alt, Ctrl, or Meta is only "keep"t from LingQ, so
+  // the browser still acts on it, as Alt+Left goes Back. kept: this key's press
+  // began kept.
+  function keyAction(event, { editable, popover, hidden, guarded, kept }) {
+    const start = event.type === "keydown" && !event.repeat;
+    const atWords = !editable && !popover && wordKey(event);
+    if (!pressKept(start, { atWords, hidden, guarded, kept })) return null;
+    if (event.altKey || event.ctrlKey || event.metaKey) return "keep";
+    return start && hidden ? "reveal" : "consume";
   }
 
   // A Boundary Delay at a position (lesson and sentence) that started at a time
@@ -286,8 +360,8 @@
   }
 
   // The action a wait at a Sentence Boundary releases into when it ends or is
-  // cut short. A Boundary Delay keeps its action, and a Vocabulary Hold runs the
-  // Playback Mode's reaction. A selection that ends outside a wait, such as one
+  // cut short. A Boundary Delay keeps its action. A Vocabulary Hold and Listen
+  // First's reveal run the Playback Mode's reaction. A selection that ends outside a wait, such as one
   // made while paused, never starts playback.
   function waitRelease(wait, at, mode, hasNext) {
     if (!wait || !at || wait.at !== at) return null;
@@ -525,6 +599,7 @@
     duckedVolume,
     explicitPlayback,
     initialCue,
+    keyAction,
     layoutAction,
     lifecycleAction,
     menuButtonKey,
@@ -533,16 +608,21 @@
     parseBridgeEvent,
     playbackMode,
     playbackStatus,
+    pressKept,
     readerLesson,
     readingSeconds,
     segmentTransition,
     seekTarget,
     sentenceAtTime,
     sentenceResponse,
+    sentenceShown,
+    sentenceVisibility,
     shortcutAction,
     storedSettings,
+    videoPaused,
     waitRelease,
     wordAudio,
+    wordKey,
     youtubeEmbedId,
   });
 });
