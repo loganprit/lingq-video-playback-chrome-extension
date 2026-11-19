@@ -21,6 +21,9 @@
     lessonKey: null,
     navigation: null,
     modeControl: null,
+    // The Neighbor Sentences list, and the lesson and sentence it shows.
+    neighbors: null,
+    neighborKey: null,
     pendingCue: null,
     playbackQueue: [],
     playerState: core.PLAYER_STATES.UNSTARTED,
@@ -135,6 +138,7 @@
     state.boundaryArmed = false;
     cancelWait();
     state.reveal = null;
+    removeNeighbors();
     state.playPendingUntil = 0;
     state.ignoreResetUntil = 0;
     state.synchronizing = false;
@@ -224,6 +228,10 @@
       description: "Show it only while the video is paused",
     },
   ];
+  const NEIGHBOR_CHOICES = [
+    { value: "on", name: "On", description: "Show the next sentences, dimmed" },
+    { value: "off", name: "Off", description: "Show only this sentence" },
+  ];
   const SHORTCUTS = [
     [["Space"], "play/pause"],
     [["P", "N"], "prev/next"],
@@ -278,7 +286,7 @@
   function render() {
     const control = state.modeControl;
     if (!control) return;
-    const { playbackMode, boundaryDelay, sentenceVisibility } = state.settings;
+    const { playbackMode, boundaryDelay, sentenceVisibility, neighborSentences } = state.settings;
     const current = MODES.find(({ mode }) => mode === playbackMode);
     const button = control.querySelector(".lspc-mode-button");
     const left = countdown();
@@ -300,6 +308,9 @@
     }
     for (const input of control.querySelectorAll("[name='lspc-visibility']")) {
       input.checked = input.value === sentenceVisibility;
+    }
+    for (const input of control.querySelectorAll("[name='lspc-neighbors']")) {
+      input.checked = (input.value === "on") === neighborSentences;
     }
     if (boundaryDelay.kind === "seconds") {
       control.querySelector(".lspc-seconds").value = String(boundaryDelay.seconds);
@@ -491,6 +502,13 @@
         "When the sentence's text shows. Click hidden text to show it.",
         VISIBILITIES,
         (sentenceVisibility) => saveSettings({ sentenceVisibility }),
+      ),
+      ...settingSection(
+        "neighbors",
+        "Neighbor Sentences",
+        "The next sentences under this one. Click one to play it. Listen First hides them.",
+        NEIGHBOR_CHOICES,
+        (value) => saveSettings({ neighborSentences: value === "on" }),
       ),
     );
     return panel;
@@ -755,6 +773,7 @@
       postBridgeCommand(core.bridgeCommand("bind", state.generation));
     }
     cuePending();
+    renderVisibility();
   }
 
   function navigationOwner(direction) {
@@ -801,6 +820,7 @@
     const percentage = Number.parseFloat(mark.style.left);
     if (!Number.isFinite(percentage) || !bounds.width) return;
 
+    cancelWait();
     state.boundaryArmed = false;
     state.synchronizing = play ? "play" : "pause";
     state.navigation = {
@@ -898,6 +918,100 @@
       state.revealGuard = Date.now() + REVEAL_GUARD_MS;
     }
     reader.classList.toggle("lspc-sentence-hidden", hidden);
+    renderNeighbors(context);
+  }
+
+  // Neighbor Sentences: the text of the next few sentences, dimmed, in a list
+  // of the companion's own between LingQ's sentence and its translation. They
+  // hide with the sentence.
+  const NEIGHBOR_LIMIT = 3;
+  // LingQ's translation and saved words, under the list, keep this much height.
+  const RESOURCES_FLOOR = 40;
+
+  const neighborResize = new ResizeObserver(() => fitNeighbors());
+
+  function removeNeighbors() {
+    neighborResize.disconnect();
+    state.neighbors?.remove();
+    state.neighbors = null;
+    state.neighborKey = null;
+  }
+
+  function renderNeighbors(context) {
+    const wrapper = context.sentence.closest(".reader-container-wrapper");
+    // Only sentences of the bound lesson: another lesson's text never shows.
+    if (
+      !wrapper?.parentElement ||
+      state.lessonKey !== context.lesson.key ||
+      !core.showsNeighbors(state.settings)
+    ) {
+      removeNeighbors();
+      return;
+    }
+    if (state.neighbors?.previousElementSibling !== wrapper) {
+      removeNeighbors();
+      state.neighbors = element("div", "lspc-neighbors");
+      wrapper.after(state.neighbors);
+      for (const box of [wrapper.parentElement, wrapper, state.layout.portal]) {
+        neighborResize.observe(box);
+      }
+    }
+    const key = position(context);
+    if (state.neighborKey === key) return;
+    state.neighborKey = key;
+    const neighbors = core.neighborSentences(
+      state.sentences,
+      Number(context.sentence.id.slice(1)),
+      NEIGHBOR_LIMIT,
+    );
+    state.neighbors.replaceChildren(
+      ...neighbors.map(({ number, text }) => {
+        const button = element("button", "lspc-neighbor", text);
+        button.type = "button";
+        button.dataset.sentence = String(number);
+        return button;
+      }),
+    );
+    fitNeighbors();
+  }
+
+  // Shows the leading neighbors that fit above the translation's floor, so the
+  // video, the sentence, and the footer never move or scroll away.
+  function fitNeighbors() {
+    const list = state.neighbors;
+    if (!list?.isConnected) return;
+    const items = [...list.children];
+    for (const item of items) item.hidden = false;
+    // The reader scrolls inside .sentence-text, whose box stays put while
+    // every neighbor shows.
+    const free =
+      list.closest(".sentence-text").getBoundingClientRect().bottom -
+      list.getBoundingClientRect().top -
+      (Number.parseFloat(getComputedStyle(list.parentElement).rowGap) || 0) -
+      RESOURCES_FLOOR;
+    const count = core.neighborCount(
+      items.map((item) => item.offsetHeight),
+      free,
+    );
+    items.forEach((item, index) => {
+      item.hidden = index >= count;
+    });
+  }
+
+  // No press on a Neighbor Sentence reaches LingQ, so its text is never taken
+  // for a word, and neither does Enter on one. A click or Enter plays that
+  // sentence through LingQ's direct sentence navigation.
+  function handleNeighborEvent(event) {
+    const neighbor = event.target?.closest?.(".lspc-neighbor");
+    if (!neighbor || neighbor.parentNode !== state.neighbors) return;
+    const key = event.type.startsWith("key");
+    if (key && event.key !== "Enter") return;
+    event.stopImmediatePropagation();
+    // A press leaves focus where it was and selects no text.
+    if (key || event.type === "mousedown") event.preventDefault();
+    if (event.type === "click" || (event.type === "keydown" && !event.repeat)) {
+      navigateToSentence(Number(neighbor.dataset.sentence), true);
+    }
   }
 
   function requestReveal(context) {
@@ -1326,6 +1440,7 @@
     "contextmenu",
   ]) {
     window.addEventListener(type, handleRevealPress, true);
+    window.addEventListener(type, handleNeighborEvent, true);
   }
   window.addEventListener(
     "pointercancel",
@@ -1336,6 +1451,8 @@
   );
   window.addEventListener("keydown", handleRevealKey, true);
   window.addEventListener("keyup", handleRevealKey, true);
+  window.addEventListener("keydown", handleNeighborEvent, true);
+  window.addEventListener("keyup", handleNeighborEvent, true);
   window.addEventListener("blur", () => {
     state.keysKept.clear();
     state.pointerKept = false;

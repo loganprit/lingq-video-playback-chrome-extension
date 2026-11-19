@@ -99,6 +99,64 @@
   opacity: 0.55;
 }
 
+/* Neighbor Sentences take their own row between LingQ's sentence and its
+   translation, which keeps the rest of the height. */
+.lspc-reader .sentence-text .loadedContent:has(> .lspc-neighbors) {
+  grid-template-rows: auto auto auto minmax(0, 1fr) !important;
+}
+
+.lspc-neighbors {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 0;
+}
+
+.lspc-neighbor {
+  display: block;
+  max-width: 60rem;
+  padding: 2px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.875em;
+  line-height: 1.6;
+  text-align: center;
+  opacity: 0.5;
+  cursor: pointer;
+  user-select: none;
+}
+
+.lspc-neighbor[hidden] {
+  display: none;
+}
+
+.lspc-neighbor:hover,
+.lspc-neighbor:focus-visible {
+  background: rgb(127 127 127 / 10%);
+  opacity: 0.75;
+}
+
+.lspc-neighbor:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
+/* They hide with the sentence and keep their space. */
+#lesson-reader.lspc-sentence-hidden .lspc-neighbors {
+  visibility: hidden;
+}
+
+/* The video gives up a little height so neighbors fit. Short windows keep
+   their smaller player floor and show fewer neighbors or none. */
+@media (height > 41.25rem) {
+  #lesson-reader:has(.lspc-neighbors) #sentence-video-player-portal.lspc-portal {
+    width: min(100%, max(20rem, calc((100dvh - 28rem) * 16 / 9)));
+  }
+}
+
 .main-footer .lesson-bottom:has(> .lspc-controls, > .lspc-status) {
   position: relative;
   container-type: inline-size;
