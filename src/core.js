@@ -188,7 +188,6 @@
       playbackMode: playbackMode(value?.playbackMode),
       boundaryDelay: boundaryDelay(value?.boundaryDelay),
       sentenceVisibility: sentenceVisibility(value?.sentenceVisibility),
-      // Neighbor Sentences are on unless turned off.
       neighborSentences: value?.neighborSentences !== false,
     };
   }
