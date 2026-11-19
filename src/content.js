@@ -942,6 +942,7 @@
     // Only sentences of the bound lesson: another lesson's text never shows.
     if (
       !wrapper?.parentElement ||
+      !state.sentences ||
       state.lessonKey !== context.lesson.key ||
       !core.showsNeighbors(state.settings)
     ) {
