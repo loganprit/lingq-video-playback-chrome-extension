@@ -304,6 +304,22 @@
     return play ? "play" : "keep";
   }
 
+  // Whether a press starts where a click that played a Neighbor Sentence just
+  // was: the rest of a double click. That click moved LingQ to the sentence,
+  // whose words may now lie under the pointer. A press's pointerdown carries
+  // no click count, so time and place decide.
+  const NEIGHBOR_FOLLOW_MS = 1000;
+  const NEIGHBOR_FOLLOW_PX = 8;
+
+  function followsNeighborClick(press, click) {
+    return (
+      Boolean(click) &&
+      press.time >= click.time &&
+      press.time - click.time <= NEIGHBOR_FOLLOW_MS &&
+      Math.hypot(press.x - click.x, press.y - click.y) <= NEIGHBOR_FOLLOW_PX
+    );
+  }
+
   // The keys of LingQ's Sentence View reader that land on a word: ArrowLeft and
   // ArrowRight step to the next word and b to the next new word, with any
   // modifier but Shift, and Shift+Space opens the selected word's popup. With
@@ -315,11 +331,12 @@
 
   // Whether a press stays away from LingQ: one aimed at the sentence's words
   // (a pointer press on the sentence, or a word key) while the text is hidden or
-  // guarded just after it showed. A press's start (pointerdown, or a key's
+  // guarded just after it showed, or one that follows a click on a Neighbor
+  // Sentence, wherever it lands. A press's start (pointerdown, or a key's
   // first keydown) decides for all of it, so its release, click, a double
   // click's dblclick, and a held key's repeats stay away too once the text shows.
-  function pressKept(start, { atWords, hidden, guarded, kept }) {
-    const now = atWords && (hidden || guarded);
+  function pressKept(start, { atWords, hidden, guarded, kept, following = false }) {
+    const now = following || (atWords && (hidden || guarded));
     return start ? now : kept || now;
   }
 
@@ -651,6 +668,7 @@
     delayEnd,
     duckedVolume,
     explicitPlayback,
+    followsNeighborClick,
     initialCue,
     keyAction,
     layoutAction,

@@ -37,9 +37,13 @@
     reveal: null,
     // Presses aimed at the sentence until this time never reach LingQ.
     revealGuard: 0,
-    // Whether LingQ never saw the current pointer press, and the codes of the
+    // Whether LingQ never saw the current pointer press, whether that press
+    // follows a click that played a Neighbor Sentence, and the codes of the
     // held keys whose presses it never saw.
     pointerKept: false,
+    pointerFollows: false,
+    // The click that last played a Neighbor Sentence: { x, y, time }.
+    neighborClick: null,
     keysKept: new Set(),
     // Until this time, a play the companion started counts as playing.
     playPendingUntil: 0,
@@ -1021,6 +1025,13 @@
     // A press selects no text, and Enter makes no second click.
     if (event.type === "mousedown" || event.type.startsWith("key")) event.preventDefault();
     if (action !== "play") return;
+    if (event.type === "click") {
+      // The rest of a double click, and a held Enter's repeats and release,
+      // land after the list changes, so they stay away from LingQ too.
+      state.neighborClick = { x: event.clientX, y: event.clientY, time: Date.now() };
+    } else {
+      state.keysKept.add(event.code);
+    }
     // The press left focus where it was, maybe in the video or a field, so a
     // click hands it back to the page and the letter shortcuts work.
     releasePointerFocus(event);
@@ -1055,13 +1066,23 @@
     const context = state.layout && readerContext();
     const start = event.type === "pointerdown";
     const hidden = Boolean(context) && !sentenceShown(context);
+    const following =
+      start &&
+      core.followsNeighborClick(
+        { x: event.clientX, y: event.clientY, time: Date.now() },
+        state.neighborClick,
+      );
     const kept = core.pressKept(start, {
       atWords: Boolean(context) && onSentence(context.sentence, event),
       hidden,
       guarded: Date.now() < state.revealGuard,
       kept: state.pointerKept && event.isTrusted,
+      following,
     });
-    if (start) state.pointerKept = kept;
+    if (start) {
+      state.pointerKept = kept;
+      state.pointerFollows = following;
+    }
     // The press ends with its pointerup. Its mouseup, click, and a double
     // click's dblclick come in the same task, so they still count as the press.
     if (state.pointerKept && event.type === "pointerup") {
@@ -1072,7 +1093,7 @@
     if (!kept) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (event.type === "click" && hidden) requestReveal(context);
+    if (event.type === "click" && hidden && !state.pointerFollows) requestReveal(context);
   }
 
   // LingQ's word keys would land on a hidden word, so they never reach LingQ,

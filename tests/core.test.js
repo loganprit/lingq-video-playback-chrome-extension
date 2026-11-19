@@ -1149,3 +1149,22 @@ test("plays a neighbor on a single click or a fresh Enter and keeps every press 
     assert.equal(core.neighborAction(event("keyup", { key })), null, key);
   }
 });
+
+test("takes a press at a played neighbor's spot, soon after, as the rest of its double click", () => {
+  const click = { x: 400, y: 300, time: 10000 };
+  assert.equal(core.followsNeighborClick({ x: 400, y: 300, time: 10140 }, click), true);
+  assert.equal(core.followsNeighborClick({ x: 405, y: 304, time: 11000 }, click), true);
+  assert.equal(core.followsNeighborClick({ x: 400, y: 300, time: 11001 }, click), false);
+  assert.equal(core.followsNeighborClick({ x: 409, y: 300, time: 10140 }, click), false);
+  assert.equal(core.followsNeighborClick({ x: 400, y: 300, time: 9990 }, click), false);
+  assert.equal(core.followsNeighborClick({ x: 400, y: 300, time: 10140 }, null), false);
+});
+
+test("keeps the whole press that follows a played neighbor's click, wherever it lands", () => {
+  const shown = { atWords: true, hidden: false, guarded: false };
+  assert.equal(core.pressKept(true, { ...shown, kept: false, following: true }), true);
+  assert.equal(core.pressKept(false, { ...shown, kept: true }), true);
+  assert.equal(core.pressKept(true, { atWords: false, hidden: false, guarded: false, kept: false, following: true }), true);
+  assert.equal(core.pressKept(true, { ...shown, kept: false, following: false }), false);
+  assert.equal(core.pressKept(true, { ...shown, kept: false }), false);
+});
