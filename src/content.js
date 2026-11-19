@@ -981,6 +981,7 @@
     const list = state.neighbors;
     if (!list?.isConnected) return;
     const items = [...list.children];
+    list.hidden = false;
     for (const item of items) item.hidden = false;
     // The reader scrolls inside .sentence-text, whose box stays put while
     // every neighbor shows.
@@ -996,6 +997,8 @@
     items.forEach((item, index) => {
       item.hidden = index >= count;
     });
+    // An empty list leaves the grid, so it adds no row gap.
+    list.hidden = !count;
   }
 
   // No press on a Neighbor Sentence reaches LingQ, so its text is never taken

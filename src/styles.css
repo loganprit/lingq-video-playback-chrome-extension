@@ -101,7 +101,7 @@
 
 /* Neighbor Sentences take their own row between LingQ's sentence and its
    translation, which keeps the rest of the height. */
-.lspc-reader .sentence-text .loadedContent:has(> .lspc-neighbors) {
+.lspc-reader .sentence-text .loadedContent:has(> .lspc-neighbors:not([hidden])) {
   grid-template-rows: auto auto auto minmax(0, 1fr) !important;
 }
 
@@ -129,6 +129,7 @@
   user-select: none;
 }
 
+.lspc-neighbors[hidden],
 .lspc-neighbor[hidden] {
   display: none;
 }
