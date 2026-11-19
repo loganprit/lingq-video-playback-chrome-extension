@@ -173,7 +173,7 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 ### Neighbor Sentences
 
 - **Style:** up to three native buttons, centered under the sentence, each one sentence's text at `0.875em` of the reader's size on a 1.6 line height, at 50% opacity. Hover and keyboard focus raise them to 75% on the hover tint, and focus adds the focus ring. No violet, no border, no card.
-- **Behavior:** a click or `Enter` plays that sentence. Presses never focus them or select their text, and never reach LingQ. They take the sentence's visibility, so they hide with it and keep their space.
+- **Behavior:** a click or `Enter` plays that sentence and returns focus to the page. Presses never select their text and never reach LingQ, and neither does a press that starts within 1 s and 8px of the click that played one (the rest of a double click), nor a held `Enter`'s repeats and release. They take the sentence's visibility, so they hide with it and keep their space.
 - **Fit:** only the leading neighbors that fit show. An empty list leaves the grid, so it adds no gap.
 
 ### Readiness Status

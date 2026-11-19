@@ -55,7 +55,7 @@ The hidden sentence keeps its place, so nothing below it moves. Its words can't 
 
 Neighbor Sentences show the next three sentences under the active one, dimmed, so you can see what comes next. They're on by default. Turn them off in Settings, and every neighbor is removed from the page.
 
-- The text comes from LingQ's sentence endpoint, the request the companion already makes for timestamps. It's plain text, not LingQ's words, so it can't be hovered, selected, or saved as a LingQ. No click, press, or `Enter` on a neighbor reaches LingQ.
+- The text comes from LingQ's sentence endpoint, the request the companion already makes for timestamps. It's plain text, not LingQ's words, so it can't be hovered, selected, or saved as a LingQ. No click, press, or `Enter` on a neighbor reaches LingQ. Neither does the rest of a double click on one, even where the new sentence's words now lie, nor a held `Enter`'s repeats and release.
 - Click a neighbor, or `Tab` to it and press `Enter`, to play that sentence. The companion selects it through LingQ's own sentence navigation, as it does after a seek, and ends a Boundary Delay or Vocabulary Hold the way `N` and `P` do. A double click moves one sentence, and a click returns focus to the page, so the letter shortcuts keep working.
 - They follow the active sentence on `N`, `P`, a seek, Continue, and LingQ's own sentence changes. Near the lesson's end fewer show, and none after the last sentence.
 - Under Show on Pause they show only while the sentence does, and keep their place while hidden. Under Listen First they never show, because you haven't heard the sentences after this one yet.
