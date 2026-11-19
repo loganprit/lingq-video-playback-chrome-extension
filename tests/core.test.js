@@ -260,6 +260,7 @@ test("normalizes the settings record and falls back to defaults", () => {
     playbackMode: "pause",
     boundaryDelay: { kind: "off" },
     sentenceVisibility: "always",
+    neighborSentences: true,
   };
   assert.deepEqual(core.companionSettings(), defaults);
   assert.deepEqual(core.companionSettings("continue"), defaults);
@@ -268,18 +269,21 @@ test("normalizes the settings record and falls back to defaults", () => {
       playbackMode: "repeat",
       boundaryDelay: { kind: "seconds", seconds: 10, extra: true },
       sentenceVisibility: "listen-first",
+      neighborSentences: false,
       extra: 1,
     }),
     {
       playbackMode: "repeat",
       boundaryDelay: { kind: "seconds", seconds: 10 },
       sentenceVisibility: "listen-first",
+      neighborSentences: false,
     },
   );
   assert.deepEqual(core.companionSettings({ boundaryDelay: { kind: "reading", seconds: 4 } }), {
     playbackMode: "pause",
     boundaryDelay: { kind: "reading" },
     sentenceVisibility: "always",
+    neighborSentences: true,
   });
   for (const visibility of ["always", "listen-first", "show-on-pause"]) {
     assert.equal(core.companionSettings({ sentenceVisibility: visibility }).sentenceVisibility, visibility);
@@ -300,6 +304,7 @@ test("carries the old stored Playback Mode into the settings record", () => {
     playbackMode: "continue",
     boundaryDelay: { kind: "off" },
     sentenceVisibility: "always",
+    neighborSentences: true,
   });
   assert.deepEqual(core.storedSettings({ playbackMode: "autoplay" }).playbackMode, "pause");
   assert.deepEqual(core.storedSettings({}), core.companionSettings());
@@ -311,6 +316,7 @@ test("prefers a stored settings record over the old Playback Mode key", () => {
     playbackMode: "pause",
     boundaryDelay: { kind: "reading" },
     sentenceVisibility: "show-on-pause",
+    neighborSentences: false,
   };
   assert.deepEqual(core.storedSettings({ settings, playbackMode: "repeat" }), settings);
   assert.deepEqual(
@@ -325,7 +331,21 @@ test("shows the sentence Always in a stored record from before Sentence Visibili
     playbackMode: "continue",
     boundaryDelay: { kind: "seconds", seconds: 3 },
     sentenceVisibility: "always",
+    neighborSentences: true,
   });
+});
+
+test("shows Neighbor Sentences in a stored record from before the setting", () => {
+  const stored = { settings: { playbackMode: "pause", sentenceVisibility: "show-on-pause" } };
+  assert.equal(core.storedSettings(stored).neighborSentences, true);
+  assert.equal(core.storedSettings({ playbackMode: "repeat" }).neighborSentences, true);
+});
+
+test("turns Neighbor Sentences off only for a stored false", () => {
+  assert.equal(core.companionSettings({ neighborSentences: false }).neighborSentences, false);
+  for (const value of [true, undefined, null, 0, "", "off", "false"]) {
+    assert.equal(core.companionSettings({ neighborSentences: value }).neighborSentences, true);
+  }
 });
 
 test("estimates a reading wait from the sentence text's length", () => {
@@ -1050,4 +1070,64 @@ test("moves on or replays when Play ends Listen First's reveal", () => {
   assert.equal(core.waitRelease(reveal, "es:1:s11", "pause", true), "stay");
   assert.equal(core.waitRelease(reveal, "es:1:s11", "continue", false), "stay");
   assert.equal(core.waitRelease(reveal, "es:1:s11", "repeat", false), "repeat");
+});
+
+const LESSON_TEXT = ["Hola, ¿qué tal?", LONG, "Muy bien.", "  Adiós.  ", "¿Y tú?"].map((text, index) => ({
+  text,
+  timestamp: [index * 2, index * 2 + 1.5],
+}));
+
+test("lists the sentences after the active one as Neighbor Sentences", () => {
+  assert.deepEqual(core.neighborSentences(LESSON_TEXT, 1, 3), [
+    { number: 2, text: LONG },
+    { number: 3, text: "Muy bien." },
+    { number: 4, text: "Adiós." },
+  ]);
+  assert.deepEqual(core.neighborSentences(LESSON_TEXT, 2, 2), [
+    { number: 3, text: "Muy bien." },
+    { number: 4, text: "Adiós." },
+  ]);
+});
+
+test("lists fewer Neighbor Sentences near the lesson's end and none after the last", () => {
+  assert.deepEqual(core.neighborSentences(LESSON_TEXT, 3, 3), [
+    { number: 4, text: "Adiós." },
+    { number: 5, text: "¿Y tú?" },
+  ]);
+  assert.deepEqual(core.neighborSentences(LESSON_TEXT, 4, 3), [{ number: 5, text: "¿Y tú?" }]);
+  assert.deepEqual(core.neighborSentences(LESSON_TEXT, 5, 3), []);
+});
+
+test("lists no Neighbor Sentences for an unknown active sentence or missing text", () => {
+  for (const active of [0, 6, -1, 1.5, NaN, undefined, "1"]) {
+    assert.deepEqual(core.neighborSentences(LESSON_TEXT, active, 3), [], String(active));
+  }
+  assert.deepEqual(core.neighborSentences(null, 1, 3), []);
+  assert.deepEqual(
+    core.neighborSentences([{ text: "Uno." }, { text: " " }, {}, { text: "Cuatro." }], 1, 3),
+    [{ number: 4, text: "Cuatro." }],
+  );
+});
+
+test("fits as many leading Neighbor Sentences as the height left allows", () => {
+  assert.equal(core.neighborCount([29, 29, 54], 200), 3);
+  assert.equal(core.neighborCount([29, 29, 54], 111), 2);
+  assert.equal(core.neighborCount([29, 29, 54], 58), 2);
+  assert.equal(core.neighborCount([29, 29, 54], 57), 1);
+  assert.equal(core.neighborCount([54, 29, 29], 57), 1);
+  assert.equal(core.neighborCount([29, 29], 28), 0);
+  assert.equal(core.neighborCount([29], -40), 0);
+  assert.equal(core.neighborCount([29], NaN), 0);
+  assert.equal(core.neighborCount([], 100), 0);
+});
+
+test("shows Neighbor Sentences with Always and Show on Pause but never Listen First", () => {
+  const settings = (sentenceVisibility, neighborSentences = true) =>
+    core.companionSettings({ sentenceVisibility, neighborSentences });
+  assert.equal(core.showsNeighbors(settings("always")), true);
+  assert.equal(core.showsNeighbors(settings("show-on-pause")), true);
+  assert.equal(core.showsNeighbors(settings("listen-first")), false);
+  for (const visibility of ["always", "listen-first", "show-on-pause"]) {
+    assert.equal(core.showsNeighbors(settings(visibility, false)), false);
+  }
 });

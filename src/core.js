@@ -188,6 +188,8 @@
       playbackMode: playbackMode(value?.playbackMode),
       boundaryDelay: boundaryDelay(value?.boundaryDelay),
       sentenceVisibility: sentenceVisibility(value?.sentenceVisibility),
+      // Neighbor Sentences are on unless turned off.
+      neighborSentences: value?.neighborSentences !== false,
     };
   }
 
@@ -249,6 +251,46 @@
     if (visibility === "listen-first") return listened;
     if (visibility === "show-on-pause") return paused;
     return true;
+  }
+
+  // Whether Neighbor Sentences show. Under Listen First they never do: the
+  // sentences after this one haven't been heard yet.
+  function showsNeighbors(settings) {
+    return settings.neighborSentences && settings.sentenceVisibility !== "listen-first";
+  }
+
+  // The Neighbor Sentences after the active sentence: up to count of them,
+  // fewer near the lesson's end, and none when the active sentence is unknown.
+  // Numbers count from 1, like LingQ's sentence ids.
+  function neighborSentences(sentences, sentenceNumber, count) {
+    if (
+      !Array.isArray(sentences) ||
+      !Number.isSafeInteger(sentenceNumber) ||
+      sentenceNumber < 1 ||
+      sentenceNumber > sentences.length
+    ) {
+      return [];
+    }
+    return sentences
+      .slice(sentenceNumber, sentenceNumber + count)
+      .map((sentence, index) => ({
+        number: sentenceNumber + 1 + index,
+        text: typeof sentence?.text === "string" ? sentence.text.trim() : "",
+      }))
+      .filter(({ text }) => text);
+  }
+
+  // How many Neighbor Sentences fit in the height left under the active
+  // sentence: the most leading ones whose heights add up to no more than it.
+  function neighborCount(heights, available) {
+    let used = 0;
+    let count = 0;
+    for (const height of heights) {
+      used += height;
+      if (!(used <= available)) break;
+      count += 1;
+    }
+    return count;
   }
 
   // The keys of LingQ's Sentence View reader that land on a word: ArrowLeft and
@@ -604,6 +646,8 @@
     lifecycleAction,
     menuButtonKey,
     menuKey,
+    neighborCount,
+    neighborSentences,
     parseBridgeCommand,
     parseBridgeEvent,
     playbackMode,
@@ -618,6 +662,7 @@
     sentenceShown,
     sentenceVisibility,
     shortcutAction,
+    showsNeighbors,
     storedSettings,
     videoPaused,
     waitRelease,
