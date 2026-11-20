@@ -1181,3 +1181,23 @@ test("pins the neighbor click's 8px radius as a true distance", () => {
   assert.equal(at(409, 300), false);
   assert.equal(at(405, 306), true);
 });
+
+test("sizes the video with neighbors so a taller window never has a smaller one", () => {
+  const rem = 16;
+  assert.equal(core.neighborVideoHeight(660, rem), 340);
+  assert.equal(core.neighborVideoHeight(600, rem), 280);
+  assert.equal(core.neighborVideoHeight(300, rem), 72);
+  assert.equal(core.neighborVideoHeight(661, rem), 340);
+  assert.equal(core.neighborVideoHeight(725, rem), 340);
+  assert.equal(core.neighborVideoHeight(788, rem), 340);
+  assert.equal(core.neighborVideoHeight(789, rem), 341);
+  assert.equal(core.neighborVideoHeight(847, rem), 399);
+  let previous = 0;
+  for (let viewport = 300; viewport <= 1400; viewport += 1) {
+    const height = core.neighborVideoHeight(viewport, rem);
+    assert.ok(height >= previous, `${viewport}px: ${height} < ${previous}`);
+    // Never below the short layout's video at the same height, where it applies.
+    if (viewport <= 660) assert.equal(height, Math.max(72, viewport - 320));
+    previous = height;
+  }
+});

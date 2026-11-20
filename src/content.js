@@ -943,6 +943,7 @@
 
   function removeNeighbors() {
     neighborResize.disconnect();
+    state.neighbors?.parentElement?.style.removeProperty("--lspc-video-height");
     state.neighbors?.remove();
     state.neighbors = null;
     state.neighborKey = null;
@@ -992,6 +993,13 @@
   function fitNeighbors() {
     const list = state.neighbors;
     if (!list?.isConnected) return;
+    list.parentElement.style.setProperty(
+      "--lspc-video-height",
+      `${core.neighborVideoHeight(
+        innerHeight,
+        Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+      )}px`,
+    );
     const items = [...list.children];
     list.hidden = false;
     for (const item of items) item.hidden = false;

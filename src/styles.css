@@ -150,12 +150,9 @@
   visibility: hidden;
 }
 
-/* The video gives up a little height so neighbors fit. Short windows keep
-   their smaller player floor and show fewer neighbors or none. */
-@media (height > 41.25rem) {
-  #lesson-reader:has(.lspc-neighbors) #sentence-video-player-portal.lspc-portal {
-    width: min(100%, max(20rem, calc((100dvh - 28rem) * 16 / 9)));
-  }
+/* With neighbors, the video's height comes from core.neighborVideoHeight. */
+#lesson-reader:has(.lspc-neighbors) #sentence-video-player-portal.lspc-portal {
+  width: min(100%, calc(var(--lspc-video-height, 21.25rem) * 16 / 9));
 }
 
 .main-footer .lesson-bottom:has(> .lspc-controls, > .lspc-status) {

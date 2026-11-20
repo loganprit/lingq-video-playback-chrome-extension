@@ -279,6 +279,18 @@
       .filter(({ text }) => text);
   }
 
+  // The video's height, in px, while Neighbor Sentences show, from the
+  // window's height and the root font size. Short windows (41.25rem or less)
+  // keep their own layout. Taller ones give the neighbors 4rem more than the
+  // layout without them, but never drop below the 21.25rem the short layout
+  // reaches at its top, so a taller window never has a smaller video. Until
+  // the window is 49.25rem tall, the video stays at that floor and neighbors
+  // take only the height left.
+  function neighborVideoHeight(viewport, rem) {
+    if (viewport <= 41.25 * rem) return Math.max(4.5 * rem, viewport - 20 * rem);
+    return Math.max(21.25 * rem, viewport - 28 * rem);
+  }
+
   // How many Neighbor Sentences fit in the height left under the active
   // sentence: the most leading ones whose heights add up to no more than it.
   function neighborCount(heights, available) {
@@ -678,6 +690,7 @@
     neighborAction,
     neighborCount,
     neighborSentences,
+    neighborVideoHeight,
     parseBridgeCommand,
     parseBridgeEvent,
     playbackMode,
