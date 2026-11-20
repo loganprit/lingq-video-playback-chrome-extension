@@ -59,7 +59,7 @@ Neighbor Sentences show the next three sentences under the active one, dimmed, s
 - Click a neighbor, or `Tab` to it and press `Enter`, to play that sentence. The companion selects it through LingQ's own sentence navigation, as it does after a seek, and ends a Boundary Delay or Vocabulary Hold the way `N` and `P` do. A double click moves one sentence, and a click returns focus to the page, so the letter shortcuts keep working.
 - They follow the active sentence on `N`, `P`, a seek, Continue, and LingQ's own sentence changes. Near the lesson's end fewer show, and none after the last sentence.
 - Under Show on Pause they show only while the sentence does, and keep their place while hidden. Under Listen First they never show, because you haven't heard the sentences after this one yet.
-- The video is 4rem shorter to make room for them. Only the neighbors that fit above LingQ's *Show Translation* row show, so the video, the sentence, and the footer never move or scroll. At 660px tall or less, the video keeps its short-window size and gives up no height, so a short neighbor shows only when it fits, and often none does.
+- In tall windows the video is 4rem shorter to make room for them. It never gets smaller than in a shorter window, though: at 660px tall or less it keeps its short-window size, and up to 788px tall it holds 340px, the short-window size at 660px. In both ranges neighbors only take the height that's left over, so often none show below about 750px. Only the neighbors that fit above LingQ's *Show Translation* row show, so the video, the sentence, and the footer never move.
 
 ## Keyboard shortcuts
 
