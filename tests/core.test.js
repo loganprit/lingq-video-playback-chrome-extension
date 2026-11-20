@@ -1168,3 +1168,16 @@ test("keeps the whole press that follows a played neighbor's click, wherever it 
   assert.equal(core.pressKept(true, { ...shown, kept: false, following: false }), false);
   assert.equal(core.pressKept(true, { ...shown, kept: false }), false);
 });
+
+test("pins the neighbor click's 8px radius as a true distance", () => {
+  const click = { x: 400, y: 300, time: 10000 };
+  const at = (x, y) => core.followsNeighborClick({ x, y, time: 10100 }, click);
+  assert.equal(at(408, 300), true);
+  assert.equal(at(392, 300), true);
+  assert.equal(at(400, 308), true);
+  assert.equal(at(400, 292), true);
+  assert.equal(at(406, 306), false);
+  assert.equal(at(400, 309), false);
+  assert.equal(at(409, 300), false);
+  assert.equal(at(405, 306), true);
+});

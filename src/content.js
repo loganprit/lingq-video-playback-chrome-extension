@@ -1064,7 +1064,9 @@
   // creation can't save one.
   function handleRevealPress(event) {
     const context = state.layout && readerContext();
-    const start = event.type === "pointerdown";
+    // The companion's own scripted presses, such as a seek's progress-mark
+    // press, neither start nor end a press.
+    const start = event.type === "pointerdown" && event.isTrusted;
     const hidden = Boolean(context) && !sentenceShown(context);
     const following =
       start &&
@@ -1085,7 +1087,7 @@
     }
     // The press ends with its pointerup. Its mouseup, click, and a double
     // click's dblclick come in the same task, so they still count as the press.
-    if (state.pointerKept && event.type === "pointerup") {
+    if (state.pointerKept && event.type === "pointerup" && event.isTrusted) {
       setTimeout(() => {
         state.pointerKept = false;
       }, 0);
