@@ -260,6 +260,7 @@ test("normalizes the settings record and falls back to defaults", () => {
     playbackMode: "pause",
     boundaryDelay: { kind: "off" },
     sentenceVisibility: "always",
+    neighborSentences: true,
   };
   assert.deepEqual(core.companionSettings(), defaults);
   assert.deepEqual(core.companionSettings("continue"), defaults);
@@ -268,18 +269,21 @@ test("normalizes the settings record and falls back to defaults", () => {
       playbackMode: "repeat",
       boundaryDelay: { kind: "seconds", seconds: 10, extra: true },
       sentenceVisibility: "listen-first",
+      neighborSentences: false,
       extra: 1,
     }),
     {
       playbackMode: "repeat",
       boundaryDelay: { kind: "seconds", seconds: 10 },
       sentenceVisibility: "listen-first",
+      neighborSentences: false,
     },
   );
   assert.deepEqual(core.companionSettings({ boundaryDelay: { kind: "reading", seconds: 4 } }), {
     playbackMode: "pause",
     boundaryDelay: { kind: "reading" },
     sentenceVisibility: "always",
+    neighborSentences: true,
   });
   for (const visibility of ["always", "listen-first", "show-on-pause"]) {
     assert.equal(core.companionSettings({ sentenceVisibility: visibility }).sentenceVisibility, visibility);
@@ -300,6 +304,7 @@ test("carries the old stored Playback Mode into the settings record", () => {
     playbackMode: "continue",
     boundaryDelay: { kind: "off" },
     sentenceVisibility: "always",
+    neighborSentences: true,
   });
   assert.deepEqual(core.storedSettings({ playbackMode: "autoplay" }).playbackMode, "pause");
   assert.deepEqual(core.storedSettings({}), core.companionSettings());
@@ -311,6 +316,7 @@ test("prefers a stored settings record over the old Playback Mode key", () => {
     playbackMode: "pause",
     boundaryDelay: { kind: "reading" },
     sentenceVisibility: "show-on-pause",
+    neighborSentences: false,
   };
   assert.deepEqual(core.storedSettings({ settings, playbackMode: "repeat" }), settings);
   assert.deepEqual(
@@ -325,7 +331,21 @@ test("shows the sentence Always in a stored record from before Sentence Visibili
     playbackMode: "continue",
     boundaryDelay: { kind: "seconds", seconds: 3 },
     sentenceVisibility: "always",
+    neighborSentences: true,
   });
+});
+
+test("shows Neighbor Sentences in a stored record from before the setting", () => {
+  const stored = { settings: { playbackMode: "pause", sentenceVisibility: "show-on-pause" } };
+  assert.equal(core.storedSettings(stored).neighborSentences, true);
+  assert.equal(core.storedSettings({ playbackMode: "repeat" }).neighborSentences, true);
+});
+
+test("turns Neighbor Sentences off only for a stored false", () => {
+  assert.equal(core.companionSettings({ neighborSentences: false }).neighborSentences, false);
+  for (const value of [true, undefined, null, 0, "", "off", "false"]) {
+    assert.equal(core.companionSettings({ neighborSentences: value }).neighborSentences, true);
+  }
 });
 
 test("estimates a reading wait from the sentence text's length", () => {
@@ -1050,4 +1070,134 @@ test("moves on or replays when Play ends Listen First's reveal", () => {
   assert.equal(core.waitRelease(reveal, "es:1:s11", "pause", true), "stay");
   assert.equal(core.waitRelease(reveal, "es:1:s11", "continue", false), "stay");
   assert.equal(core.waitRelease(reveal, "es:1:s11", "repeat", false), "repeat");
+});
+
+const LESSON_TEXT = ["Hola, ¿qué tal?", LONG, "Muy bien.", "  Adiós.  ", "¿Y tú?"].map((text, index) => ({
+  text,
+  timestamp: [index * 2, index * 2 + 1.5],
+}));
+
+test("lists the sentences after the active one as Neighbor Sentences", () => {
+  assert.deepEqual(core.neighborSentences(LESSON_TEXT, 1, 3), [
+    { number: 2, text: LONG },
+    { number: 3, text: "Muy bien." },
+    { number: 4, text: "Adiós." },
+  ]);
+  assert.deepEqual(core.neighborSentences(LESSON_TEXT, 2, 2), [
+    { number: 3, text: "Muy bien." },
+    { number: 4, text: "Adiós." },
+  ]);
+});
+
+test("lists fewer Neighbor Sentences near the lesson's end and none after the last", () => {
+  assert.deepEqual(core.neighborSentences(LESSON_TEXT, 3, 3), [
+    { number: 4, text: "Adiós." },
+    { number: 5, text: "¿Y tú?" },
+  ]);
+  assert.deepEqual(core.neighborSentences(LESSON_TEXT, 4, 3), [{ number: 5, text: "¿Y tú?" }]);
+  assert.deepEqual(core.neighborSentences(LESSON_TEXT, 5, 3), []);
+});
+
+test("lists no Neighbor Sentences for an unknown active sentence or missing text", () => {
+  for (const active of [0, 6, -1, 1.5, NaN, undefined, "1"]) {
+    assert.deepEqual(core.neighborSentences(LESSON_TEXT, active, 3), [], String(active));
+  }
+  assert.deepEqual(core.neighborSentences(null, 1, 3), []);
+  assert.deepEqual(
+    core.neighborSentences([{ text: "Uno." }, { text: " " }, {}, { text: "Cuatro." }], 1, 3),
+    [{ number: 4, text: "Cuatro." }],
+  );
+});
+
+test("fits as many leading Neighbor Sentences as the height left allows", () => {
+  assert.equal(core.neighborCount([29, 29, 54], 200), 3);
+  assert.equal(core.neighborCount([29, 29, 54], 111), 2);
+  assert.equal(core.neighborCount([29, 29, 54], 58), 2);
+  assert.equal(core.neighborCount([29, 29, 54], 57), 1);
+  assert.equal(core.neighborCount([54, 29, 29], 57), 1);
+  assert.equal(core.neighborCount([29, 29], 28), 0);
+  assert.equal(core.neighborCount([29], -40), 0);
+  assert.equal(core.neighborCount([29], NaN), 0);
+  assert.equal(core.neighborCount([], 100), 0);
+});
+
+test("shows Neighbor Sentences with Always and Show on Pause but never Listen First", () => {
+  const settings = (sentenceVisibility, neighborSentences = true) =>
+    core.companionSettings({ sentenceVisibility, neighborSentences });
+  assert.equal(core.showsNeighbors(settings("always")), true);
+  assert.equal(core.showsNeighbors(settings("show-on-pause")), true);
+  assert.equal(core.showsNeighbors(settings("listen-first")), false);
+  for (const visibility of ["always", "listen-first", "show-on-pause"]) {
+    assert.equal(core.showsNeighbors(settings(visibility, false)), false);
+  }
+});
+
+test("plays a neighbor on a single click or a fresh Enter and keeps every press from LingQ", () => {
+  const event = (type, extra = {}) => ({ type, key: undefined, repeat: false, detail: 1, ...extra });
+  assert.equal(core.neighborAction(event("click")), "play");
+  assert.equal(core.neighborAction(event("click", { detail: 0 })), "play");
+  assert.equal(core.neighborAction(event("keydown", { key: "Enter" })), "play");
+  assert.equal(core.neighborAction(event("click", { detail: 2 })), "keep");
+  assert.equal(core.neighborAction(event("click", { detail: 3 })), "keep");
+  assert.equal(core.neighborAction(event("keydown", { key: "Enter", repeat: true })), "keep");
+  assert.equal(core.neighborAction(event("keyup", { key: "Enter" })), "keep");
+  for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "dblclick", "auxclick", "contextmenu"]) {
+    assert.equal(core.neighborAction(event(type)), "keep", type);
+  }
+  for (const key of [" ", "n", "r", "Tab", "ArrowRight"]) {
+    assert.equal(core.neighborAction(event("keydown", { key })), null, key);
+    assert.equal(core.neighborAction(event("keyup", { key })), null, key);
+  }
+});
+
+test("takes a press at a played neighbor's spot, soon after, as the rest of its double click", () => {
+  const click = { x: 400, y: 300, time: 10000 };
+  assert.equal(core.followsNeighborClick({ x: 400, y: 300, time: 10140 }, click), true);
+  assert.equal(core.followsNeighborClick({ x: 405, y: 304, time: 11000 }, click), true);
+  assert.equal(core.followsNeighborClick({ x: 400, y: 300, time: 11001 }, click), false);
+  assert.equal(core.followsNeighborClick({ x: 409, y: 300, time: 10140 }, click), false);
+  assert.equal(core.followsNeighborClick({ x: 400, y: 300, time: 9990 }, click), false);
+  assert.equal(core.followsNeighborClick({ x: 400, y: 300, time: 10140 }, null), false);
+});
+
+test("keeps the whole press that follows a played neighbor's click, wherever it lands", () => {
+  const shown = { atWords: true, hidden: false, guarded: false };
+  assert.equal(core.pressKept(true, { ...shown, kept: false, following: true }), true);
+  assert.equal(core.pressKept(false, { ...shown, kept: true }), true);
+  assert.equal(core.pressKept(true, { atWords: false, hidden: false, guarded: false, kept: false, following: true }), true);
+  assert.equal(core.pressKept(true, { ...shown, kept: false, following: false }), false);
+  assert.equal(core.pressKept(true, { ...shown, kept: false }), false);
+});
+
+test("pins the neighbor click's 8px radius as a true distance", () => {
+  const click = { x: 400, y: 300, time: 10000 };
+  const at = (x, y) => core.followsNeighborClick({ x, y, time: 10100 }, click);
+  assert.equal(at(408, 300), true);
+  assert.equal(at(392, 300), true);
+  assert.equal(at(400, 308), true);
+  assert.equal(at(400, 292), true);
+  assert.equal(at(406, 306), false);
+  assert.equal(at(400, 309), false);
+  assert.equal(at(409, 300), false);
+  assert.equal(at(405, 306), true);
+});
+
+test("sizes the video with neighbors so a taller window never has a smaller one", () => {
+  const rem = 16;
+  assert.equal(core.neighborVideoHeight(660, rem), 340);
+  assert.equal(core.neighborVideoHeight(600, rem), 280);
+  assert.equal(core.neighborVideoHeight(300, rem), 72);
+  assert.equal(core.neighborVideoHeight(661, rem), 340);
+  assert.equal(core.neighborVideoHeight(725, rem), 340);
+  assert.equal(core.neighborVideoHeight(788, rem), 340);
+  assert.equal(core.neighborVideoHeight(789, rem), 341);
+  assert.equal(core.neighborVideoHeight(847, rem), 399);
+  let previous = 0;
+  for (let viewport = 300; viewport <= 1400; viewport += 1) {
+    const height = core.neighborVideoHeight(viewport, rem);
+    assert.ok(height >= previous, `${viewport}px: ${height} < ${previous}`);
+    // Never below the short layout's video at the same height, where it applies.
+    if (viewport <= 660) assert.equal(height, Math.max(72, viewport - 320));
+    previous = height;
+  }
 });
