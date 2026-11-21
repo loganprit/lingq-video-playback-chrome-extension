@@ -21,6 +21,9 @@
     lessonKey: null,
     navigation: null,
     modeControl: null,
+    // The Neighbor Sentences list, and the lesson and sentence it shows.
+    neighbors: null,
+    neighborKey: null,
     pendingCue: null,
     playbackQueue: [],
     playerState: core.PLAYER_STATES.UNSTARTED,
@@ -34,9 +37,13 @@
     reveal: null,
     // Presses aimed at the sentence until this time never reach LingQ.
     revealGuard: 0,
-    // Whether LingQ never saw the current pointer press, and the codes of the
+    // Whether LingQ never saw the current pointer press, whether that press
+    // follows a click that played a Neighbor Sentence, and the codes of the
     // held keys whose presses it never saw.
     pointerKept: false,
+    pointerFollows: false,
+    // The click that last played a Neighbor Sentence: { x, y, time }.
+    neighborClick: null,
     keysKept: new Set(),
     // Until this time, a play the companion started counts as playing.
     playPendingUntil: 0,
@@ -135,6 +142,7 @@
     state.boundaryArmed = false;
     cancelWait();
     state.reveal = null;
+    removeNeighbors();
     state.playPendingUntil = 0;
     state.ignoreResetUntil = 0;
     state.synchronizing = false;
@@ -224,6 +232,10 @@
       description: "Show it only while the video is paused",
     },
   ];
+  const NEIGHBOR_CHOICES = [
+    { value: "on", name: "On", description: "Show the next sentences, dimmed" },
+    { value: "off", name: "Off", description: "Show only this sentence" },
+  ];
   const SHORTCUTS = [
     [["Space"], "play/pause"],
     [["P", "N"], "prev/next"],
@@ -278,7 +290,7 @@
   function render() {
     const control = state.modeControl;
     if (!control) return;
-    const { playbackMode, boundaryDelay, sentenceVisibility } = state.settings;
+    const { playbackMode, boundaryDelay, sentenceVisibility, neighborSentences } = state.settings;
     const current = MODES.find(({ mode }) => mode === playbackMode);
     const button = control.querySelector(".lspc-mode-button");
     const left = countdown();
@@ -300,6 +312,9 @@
     }
     for (const input of control.querySelectorAll("[name='lspc-visibility']")) {
       input.checked = input.value === sentenceVisibility;
+    }
+    for (const input of control.querySelectorAll("[name='lspc-neighbors']")) {
+      input.checked = (input.value === "on") === neighborSentences;
     }
     if (boundaryDelay.kind === "seconds") {
       control.querySelector(".lspc-seconds").value = String(boundaryDelay.seconds);
@@ -491,6 +506,13 @@
         "When the sentence's text shows. Click hidden text to show it.",
         VISIBILITIES,
         (sentenceVisibility) => saveSettings({ sentenceVisibility }),
+      ),
+      ...settingSection(
+        "neighbors",
+        "Neighbor Sentences",
+        "The next sentences under this one. Click one to play it. Listen First hides them.",
+        NEIGHBOR_CHOICES,
+        (value) => saveSettings({ neighborSentences: value === "on" }),
       ),
     );
     return panel;
@@ -755,6 +777,7 @@
       postBridgeCommand(core.bridgeCommand("bind", state.generation));
     }
     cuePending();
+    renderVisibility();
   }
 
   function navigationOwner(direction) {
@@ -801,6 +824,7 @@
     const percentage = Number.parseFloat(mark.style.left);
     if (!Number.isFinite(percentage) || !bounds.width) return;
 
+    cancelWait();
     state.boundaryArmed = false;
     state.synchronizing = play ? "play" : "pause";
     state.navigation = {
@@ -898,6 +922,128 @@
       state.revealGuard = Date.now() + REVEAL_GUARD_MS;
     }
     reader.classList.toggle("lspc-sentence-hidden", hidden);
+    renderNeighbors(context);
+  }
+
+  // Neighbor Sentences: the text of the next few sentences, dimmed, in a list
+  // of the companion's own between LingQ's sentence and its translation. They
+  // hide with the sentence.
+  const NEIGHBOR_LIMIT = 3;
+  // LingQ's translation and saved words, under the list, keep this much height.
+  const RESOURCES_FLOOR = 40;
+
+  // A fit can show or hide the reader's scrollbar, which resizes the observed
+  // sentence box. Fitting in the next frame keeps that out of the observer's
+  // own delivery, which would report a loop.
+  let fitFrame = 0;
+  const neighborResize = new ResizeObserver(() => {
+    cancelAnimationFrame(fitFrame);
+    fitFrame = requestAnimationFrame(fitNeighbors);
+  });
+
+  function removeNeighbors() {
+    neighborResize.disconnect();
+    state.neighbors?.parentElement?.style.removeProperty("--lspc-video-height");
+    state.neighbors?.remove();
+    state.neighbors = null;
+    state.neighborKey = null;
+  }
+
+  function renderNeighbors(context) {
+    const wrapper = context.sentence.closest(".reader-container-wrapper");
+    // Only sentences of the bound lesson: another lesson's text never shows.
+    if (
+      !wrapper?.parentElement ||
+      !state.sentences ||
+      state.lessonKey !== context.lesson.key ||
+      !core.showsNeighbors(state.settings)
+    ) {
+      removeNeighbors();
+      return;
+    }
+    if (state.neighbors?.previousElementSibling !== wrapper) {
+      removeNeighbors();
+      state.neighbors = element("div", "lspc-neighbors");
+      wrapper.after(state.neighbors);
+      for (const box of [wrapper.closest(".sentence-text"), wrapper, state.layout.portal]) {
+        neighborResize.observe(box);
+      }
+    }
+    const key = position(context);
+    if (state.neighborKey === key) return;
+    state.neighborKey = key;
+    const neighbors = core.neighborSentences(
+      state.sentences,
+      Number(context.sentence.id.slice(1)),
+      NEIGHBOR_LIMIT,
+    );
+    state.neighbors.replaceChildren(
+      ...neighbors.map(({ number, text }) => {
+        const button = element("button", "lspc-neighbor", text);
+        button.type = "button";
+        button.dataset.sentence = String(number);
+        return button;
+      }),
+    );
+    fitNeighbors();
+  }
+
+  // Shows the leading neighbors that fit above the translation's floor, so the
+  // video, the sentence, and the footer never move or scroll away.
+  function fitNeighbors() {
+    const list = state.neighbors;
+    if (!list?.isConnected) return;
+    list.parentElement.style.setProperty(
+      "--lspc-video-height",
+      `${core.neighborVideoHeight(
+        innerHeight,
+        Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+      )}px`,
+    );
+    const items = [...list.children];
+    list.hidden = false;
+    for (const item of items) item.hidden = false;
+    // The reader scrolls inside .sentence-text, whose box stays put while
+    // every neighbor shows.
+    const free =
+      list.closest(".sentence-text").getBoundingClientRect().bottom -
+      list.getBoundingClientRect().top -
+      (Number.parseFloat(getComputedStyle(list.parentElement).rowGap) || 0) -
+      RESOURCES_FLOOR;
+    const count = core.neighborCount(
+      items.map((item) => item.offsetHeight),
+      free,
+    );
+    items.forEach((item, index) => {
+      item.hidden = index >= count;
+    });
+    // An empty list leaves the grid, so it adds no row gap.
+    list.hidden = !count;
+  }
+
+  // No press on a Neighbor Sentence reaches LingQ, so its text is never taken
+  // for a word, and neither does Enter on one. A click or Enter plays that
+  // sentence through LingQ's direct sentence navigation.
+  function handleNeighborEvent(event) {
+    const neighbor = event.target?.closest?.(".lspc-neighbor");
+    const action =
+      neighbor?.parentNode === state.neighbors ? core.neighborAction(event) : null;
+    if (!action) return;
+    event.stopImmediatePropagation();
+    // A press selects no text, and Enter makes no second click.
+    if (event.type === "mousedown" || event.type.startsWith("key")) event.preventDefault();
+    if (action !== "play") return;
+    if (event.type === "click") {
+      // The rest of a double click, and a held Enter's repeats and release,
+      // land after the list changes, so they stay away from LingQ too.
+      state.neighborClick = { x: event.clientX, y: event.clientY, time: Date.now() };
+    } else {
+      state.keysKept.add(event.code);
+    }
+    // The press left focus where it was, maybe in the video or a field, so a
+    // click hands it back to the page and the letter shortcuts work.
+    releasePointerFocus(event);
+    navigateToSentence(Number(neighbor.dataset.sentence), true);
   }
 
   function requestReveal(context) {
@@ -926,18 +1072,30 @@
   // creation can't save one.
   function handleRevealPress(event) {
     const context = state.layout && readerContext();
-    const start = event.type === "pointerdown";
+    // The companion's own scripted presses, such as a seek's progress-mark
+    // press, neither start nor end a press.
+    const start = event.type === "pointerdown" && event.isTrusted;
     const hidden = Boolean(context) && !sentenceShown(context);
+    const following =
+      start &&
+      core.followsNeighborClick(
+        { x: event.clientX, y: event.clientY, time: Date.now() },
+        state.neighborClick,
+      );
     const kept = core.pressKept(start, {
       atWords: Boolean(context) && onSentence(context.sentence, event),
       hidden,
       guarded: Date.now() < state.revealGuard,
       kept: state.pointerKept && event.isTrusted,
+      following,
     });
-    if (start) state.pointerKept = kept;
+    if (start) {
+      state.pointerKept = kept;
+      state.pointerFollows = following;
+    }
     // The press ends with its pointerup. Its mouseup, click, and a double
     // click's dblclick come in the same task, so they still count as the press.
-    if (state.pointerKept && event.type === "pointerup") {
+    if (state.pointerKept && event.type === "pointerup" && event.isTrusted) {
       setTimeout(() => {
         state.pointerKept = false;
       }, 0);
@@ -945,7 +1103,7 @@
     if (!kept) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (event.type === "click" && hidden) requestReveal(context);
+    if (event.type === "click" && hidden && !state.pointerFollows) requestReveal(context);
   }
 
   // LingQ's word keys would land on a hidden word, so they never reach LingQ,
@@ -1326,6 +1484,7 @@
     "contextmenu",
   ]) {
     window.addEventListener(type, handleRevealPress, true);
+    window.addEventListener(type, handleNeighborEvent, true);
   }
   window.addEventListener(
     "pointercancel",
@@ -1336,6 +1495,8 @@
   );
   window.addEventListener("keydown", handleRevealKey, true);
   window.addEventListener("keyup", handleRevealKey, true);
+  window.addEventListener("keydown", handleNeighborEvent, true);
+  window.addEventListener("keyup", handleNeighborEvent, true);
   window.addEventListener("blur", () => {
     state.keysKept.clear();
     state.pointerKept = false;

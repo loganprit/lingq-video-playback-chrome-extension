@@ -188,6 +188,7 @@
       playbackMode: playbackMode(value?.playbackMode),
       boundaryDelay: boundaryDelay(value?.boundaryDelay),
       sentenceVisibility: sentenceVisibility(value?.sentenceVisibility),
+      neighborSentences: value?.neighborSentences !== false,
     };
   }
 
@@ -251,6 +252,86 @@
     return true;
   }
 
+  // Whether Neighbor Sentences show. Under Listen First they never do: the
+  // sentences after this one haven't been heard yet.
+  function showsNeighbors(settings) {
+    return settings.neighborSentences && settings.sentenceVisibility !== "listen-first";
+  }
+
+  // The Neighbor Sentences after the active sentence: up to count of them,
+  // fewer near the lesson's end, and none when the active sentence is unknown.
+  // Numbers count from 1, like LingQ's sentence ids.
+  function neighborSentences(sentences, sentenceNumber, count) {
+    if (
+      !Array.isArray(sentences) ||
+      !Number.isSafeInteger(sentenceNumber) ||
+      sentenceNumber < 1 ||
+      sentenceNumber > sentences.length
+    ) {
+      return [];
+    }
+    return sentences
+      .slice(sentenceNumber, sentenceNumber + count)
+      .map((sentence, index) => ({
+        number: sentenceNumber + 1 + index,
+        text: typeof sentence?.text === "string" ? sentence.text.trim() : "",
+      }))
+      .filter(({ text }) => text);
+  }
+
+  // The video's height, in px, while Neighbor Sentences show, from the
+  // window's height and the root font size. Short windows (41.25rem or less)
+  // keep their own layout. Taller ones give the neighbors 4rem more than the
+  // layout without them, but never drop below the 21.25rem the short layout
+  // reaches at its top, so a taller window never has a smaller video. Until
+  // the window is 49.25rem tall, the video stays at that floor and neighbors
+  // take only the height left.
+  function neighborVideoHeight(viewport, rem) {
+    if (viewport <= 41.25 * rem) return Math.max(4.5 * rem, viewport - 20 * rem);
+    return Math.max(21.25 * rem, viewport - 28 * rem);
+  }
+
+  // How many Neighbor Sentences fit in the height left under the active
+  // sentence: the most leading ones whose heights add up to no more than it.
+  function neighborCount(heights, available) {
+    let used = 0;
+    let count = 0;
+    for (const height of heights) {
+      used += height;
+      if (!(used <= available)) break;
+      count += 1;
+    }
+    return count;
+  }
+
+  // What the companion does with an event on a Neighbor Sentence: "play" its
+  // sentence, or "keep" the event from LingQ. A press and Enter are all kept,
+  // and only a single click or a fresh Enter plays, so a double click moves one
+  // sentence. Other keys are left alone (null).
+  function neighborAction(event) {
+    const key = event.type === "keydown" || event.type === "keyup";
+    if (key && event.key !== "Enter") return null;
+    const play =
+      event.type === "keydown" ? !event.repeat : event.type === "click" && event.detail <= 1;
+    return play ? "play" : "keep";
+  }
+
+  // Whether a press starts where a click that played a Neighbor Sentence just
+  // was: the rest of a double click. That click moved LingQ to the sentence,
+  // whose words may now lie under the pointer. A press's pointerdown carries
+  // no click count, so time and place decide.
+  const NEIGHBOR_FOLLOW_MS = 1000;
+  const NEIGHBOR_FOLLOW_PX = 8;
+
+  function followsNeighborClick(press, click) {
+    return (
+      Boolean(click) &&
+      press.time >= click.time &&
+      press.time - click.time <= NEIGHBOR_FOLLOW_MS &&
+      Math.hypot(press.x - click.x, press.y - click.y) <= NEIGHBOR_FOLLOW_PX
+    );
+  }
+
   // The keys of LingQ's Sentence View reader that land on a word: ArrowLeft and
   // ArrowRight step to the next word and b to the next new word, with any
   // modifier but Shift, and Shift+Space opens the selected word's popup. With
@@ -262,11 +343,12 @@
 
   // Whether a press stays away from LingQ: one aimed at the sentence's words
   // (a pointer press on the sentence, or a word key) while the text is hidden or
-  // guarded just after it showed. A press's start (pointerdown, or a key's
+  // guarded just after it showed, or one that follows a click on a Neighbor
+  // Sentence, wherever it lands. A press's start (pointerdown, or a key's
   // first keydown) decides for all of it, so its release, click, a double
   // click's dblclick, and a held key's repeats stay away too once the text shows.
-  function pressKept(start, { atWords, hidden, guarded, kept }) {
-    const now = atWords && (hidden || guarded);
+  function pressKept(start, { atWords, hidden, guarded, kept, following = false }) {
+    const now = following || (atWords && (hidden || guarded));
     return start ? now : kept || now;
   }
 
@@ -598,12 +680,17 @@
     delayEnd,
     duckedVolume,
     explicitPlayback,
+    followsNeighborClick,
     initialCue,
     keyAction,
     layoutAction,
     lifecycleAction,
     menuButtonKey,
     menuKey,
+    neighborAction,
+    neighborCount,
+    neighborSentences,
+    neighborVideoHeight,
     parseBridgeCommand,
     parseBridgeEvent,
     playbackMode,
@@ -618,6 +705,7 @@
     sentenceShown,
     sentenceVisibility,
     shortcutAction,
+    showsNeighbors,
     storedSettings,
     videoPaused,
     waitRelease,

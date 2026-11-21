@@ -113,7 +113,7 @@ LingQ marks its dark theme with `theme-luminosity-dark` on `body`. It keeps `is-
 
 ## Layout
 
-The 16:9 player is centered and sized from both reader width and available viewport height. The real LingQ sentence remains centered below it. The companion's footer items sit after LingQ's `section--last` and match its two equal rows for icon and label, so icons and label baselines line up with *Review Sentence*. The companion always stays in LingQ's single footer row. LingQ's footer container is the size container: where its content box is under `37rem` (LingQ's 480px footer below a 640px viewport, or a 600px footer beside the word panel at about 1024px), the items drop their labels and keep 44px icon targets. Their accessible names are unchanged. Short windows reduce the player's floor at `41.25rem` viewport height so the complete study loop remains usable.
+The 16:9 player is centered and sized from both reader width and available viewport height. The real LingQ sentence remains centered below it. The companion's footer items sit after LingQ's `section--last` and match its two equal rows for icon and label, so icons and label baselines line up with *Review Sentence*. The companion always stays in LingQ's single footer row. LingQ's footer container is the size container: where its content box is under `37rem` (LingQ's 480px footer below a 640px viewport, or a 600px footer beside the word panel at about 1024px), the items drop their labels and keep 44px icon targets. Their accessible names are unchanged. Short windows reduce the player's floor at `41.25rem` viewport height so the complete study loop remains usable. With Neighbor Sentences, `core.neighborVideoHeight` sets the player's height through `--lspc-video-height`: the short layout's height at `41.25rem` or less, and above it the larger of `100dvh - 28rem` (4rem less than without neighbors) and `21.25rem`, the short layout's height at its top. So a taller window never has a smaller player, and up to `49.25rem` (788px) the player holds 340px while neighbors take only the height left. They sit in their own grid row between the sentence and LingQ's translation, which keeps at least 40px. Only the leading neighbors that fit show, so the player, sentence, and footer never move.
 
 Spacing uses a 4px item gap, a 24px player-to-sentence gap, and an 8px gap between the menu and its button.
 
@@ -160,7 +160,8 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 
 - **Popover:** the menu's surface, radius, elevation, motion, and placement, aligned to the Settings button's right edge.
 - **Boundary Delay:** a caption heading and a one-line description over three rows styled as menu options: Off, Fixed with a 1–10 s list, and Reading time. Each row wraps a native radio that stays focusable but unseen. The selected row takes the violet tint and check, and the focused row takes the focus ring.
-- **Sentence Visibility:** the same section shape under a hairline: Always, Listen First, and Show on Pause. The panel scrolls if a short window can't fit both sections.
+- **Sentence Visibility:** the same section shape under a hairline: Always, Listen First, and Show on Pause.
+- **Neighbor Sentences:** the same shape again: On and Off. The panel scrolls if a short window can't fit every section.
 - **Keyboard:** focus moves to the selected choice on open. The arrow keys choose among a section's radios, each section and the seconds list is its own Tab stop, and Escape closes and returns focus to the button. No key pressed in the panel reaches LingQ, so Escape never also closes a word card or the video, and Space never reads the lesson aloud.
 - **Closing:** Escape, a click outside, or focus leaving the panel. Choosing keeps it open.
 
@@ -168,6 +169,12 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 
 - **Style:** while Sentence Visibility hides it, LingQ's real sentence stays in place under `visibility: hidden`, so the layout never jumps. Its words can't be hovered, selected, or clicked. A `0.875rem` caption at 55% of the text color, "Click to show the sentence", sits at its center.
 - **Reveal:** a click on the sentence's box shows it, and so does a LingQ word key (`←`, `→`, `b`, `Shift`+`Space`). A press or key that begins on the hidden text stays away from LingQ to its end, and so does every press in the half second after any reveal, so no word is selected or saved. The same keys held with `Alt`, `Ctrl`, or `Cmd` never reach LingQ either, but keep the browser's own action. Something LingQ floats over the sentence still gets its clicks. A sentence that holds a selection always shows.
+
+### Neighbor Sentences
+
+- **Style:** up to three native buttons, centered under the sentence, each one sentence's text at `0.875em` of the reader's size on a 1.6 line height, at 50% opacity. Hover and keyboard focus raise them to 75% on the hover tint, and focus adds the focus ring. No violet, no border, no card.
+- **Behavior:** a click or `Enter` plays that sentence and returns focus to the page. Presses never select their text and never reach LingQ, and neither does a press that starts within 1 s and 8px of the click that played one (the rest of a double click), nor a held `Enter`'s repeats and release. They take the sentence's visibility, so they hide with it and keep their space.
+- **Fit:** only the leading neighbors that fit show. An empty list leaves the grid, so it adds no gap.
 
 ### Readiness Status
 
