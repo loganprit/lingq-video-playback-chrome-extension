@@ -546,6 +546,64 @@
     return Number.isFinite(value) && value > 0 && value <= 16;
   }
 
+  // Focus Mode's layout for a window of width by height px, with rem the root
+  // font size. From 1024px wide, where LingQ docks its word panel, it splits:
+  // the video and controls on the left, and the sentence with its neighbors or
+  // the word panel on the right, which keeps at least 24rem and grows to 40rem
+  // (36% of the width). Narrower windows stack the video, the controls, the
+  // sentence, and the neighbors or the word panel, with 26rem kept under the
+  // controls for the sentence, its translation, and the panel. The video is as
+  // large as its column allows and never shorter than 9rem; a window too short
+  // for that floor scrolls.
+  const FOCUS_SPLIT_WIDTH = 1024;
+
+  function focusLayout(width, height, rem) {
+    const split = width >= FOCUS_SPLIT_WIDTH;
+    // The video's column: split, what the 2rem margins, the 3.5rem gap, and
+    // the sentence's column leave; stacked, the width inside 1.5rem margins.
+    const column = split
+      ? width - 4 * rem - 3.5 * rem - Math.min(40 * rem, Math.max(24 * rem, width * 0.36))
+      : Math.min(width - 3 * rem, 48 * rem);
+    // Under the bar (5rem): split, a 1.5rem gap, the controls' two rows
+    // (7.5rem), and 1.5rem at the foot; stacked, the controls' row (5rem) and
+    // the 26rem kept for the sentence and what follows it.
+    const room = height - (split ? 5 + 1.5 + 7.5 + 1.5 : 5 + 5 + 26) * rem;
+    const videoHeight = Math.max(9 * rem, Math.min((column * 9) / 16, room));
+    return {
+      kind: split ? "split" : "stack",
+      videoWidth: Math.round((videoHeight * 16) / 9),
+      videoHeight: Math.round(videoHeight),
+    };
+  }
+
+  // Whether Focus Mode shows LingQ's word panel in place of the Neighbor
+  // Sentences. LingQ's floating card shows whenever LingQ opens it. Its docked
+  // panel keeps the last word it showed even with nothing selected, and a
+  // click on that word shows it again without selecting it. So the docked panel
+  // shows after a press on a word of the active sentence (pressed), or for a
+  // selection there (marks: what is selected) that Escape didn't put away
+  // (dismissed: the marks then).
+  function wordPanelOpen({ docked, floating, pressed, marks, dismissed }) {
+    if (!docked) return floating;
+    return pressed || (Boolean(marks) && marks !== dismissed);
+  }
+
+  // What Escape does in Focus Mode. LingQ closes the video on any Escape that
+  // reaches its document, so in Focus Mode none does. Escape puts away an open
+  // word panel first ("close-panel"), then leaves Focus Mode ("exit"). A key
+  // held from that exit, a repeat, a modified Escape, and one typed in a field
+  // are only kept from LingQ ("consume"). kept: this Escape's press left Focus
+  // Mode. Only keydown matters, because LingQ acts on keydown.
+  function focusEscape(event, { focus, panelOpen, editable, kept }) {
+    if (event.type !== "keydown" || event.key !== "Escape") return null;
+    if (kept) return "consume";
+    if (!focus) return null;
+    if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || editable) {
+      return "consume";
+    }
+    return panelOpen ? "close-panel" : "exit";
+  }
+
   function validGeneration(value) {
     return Number.isSafeInteger(value) && value > 0;
   }
@@ -717,6 +775,8 @@
     delayEnd,
     duckedVolume,
     explicitPlayback,
+    focusEscape,
+    focusLayout,
     followsNeighborClick,
     initialCue,
     keyAction,
@@ -749,6 +809,7 @@
     videoPaused,
     waitRelease,
     wordAudio,
+    wordPanelOpen,
     wordKey,
     youtubeEmbedId,
   });

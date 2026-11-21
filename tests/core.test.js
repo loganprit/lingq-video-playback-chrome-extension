@@ -1243,3 +1243,142 @@ test("accepts a reported playback rate only as a positive finite number", () => 
   assert.equal(core.bridgeEvent("rate", 4), null);
   assert.equal(core.bridgeEvent("rate", 4, { rate: 1, extra: 1 }), null);
 });
+
+test("splits Focus Mode from 1024px wide, where LingQ docks its word panel", () => {
+  assert.equal(core.focusLayout(1024, 900, 16).kind, "split");
+  assert.equal(core.focusLayout(1600, 900, 16).kind, "split");
+  assert.equal(core.focusLayout(1023, 900, 16).kind, "stack");
+  assert.equal(core.focusLayout(800, 900, 16).kind, "stack");
+});
+
+test("sizes Focus Mode's video at 16:9 within its column and the window's height", () => {
+  // 1600 - 4rem margins - 3.5rem gap - 36% for the sentence column.
+  assert.deepEqual(core.focusLayout(1600, 900, 16), {
+    kind: "split",
+    videoWidth: 904,
+    videoHeight: 509,
+  });
+  // A short wide window: 600 - 15.5rem for the bar, controls, and margins.
+  assert.deepEqual(core.focusLayout(1600, 600, 16), {
+    kind: "split",
+    videoWidth: 626,
+    videoHeight: 352,
+  });
+  // Split screen: 900 - 36rem for the bar, controls, sentence, and panel.
+  assert.deepEqual(core.focusLayout(800, 900, 16), {
+    kind: "stack",
+    videoWidth: 576,
+    videoHeight: 324,
+  });
+  // A wide split screen keeps the stack's column under 48rem.
+  assert.equal(core.focusLayout(1000, 2000, 16).videoWidth, 768);
+});
+
+test("keeps Focus Mode's video at least 9rem tall in very short windows", () => {
+  assert.equal(core.focusLayout(1600, 300, 16).videoHeight, 144);
+  assert.equal(core.focusLayout(800, 400, 16).videoHeight, 144);
+  assert.equal(core.focusLayout(800, 400, 20).videoHeight, 180);
+});
+
+test("never gives a taller or wider window a smaller Focus Mode video", () => {
+  for (const width of [640, 800, 1023, 1024, 1280, 1600, 2560]) {
+    let previous = 0;
+    for (let height = 300; height <= 1600; height += 10) {
+      const { videoHeight } = core.focusLayout(width, height, 16);
+      assert.ok(videoHeight >= previous, `${width}x${height}`);
+      previous = videoHeight;
+    }
+  }
+  for (const height of [500, 900, 1400]) {
+    for (const kind of ["split", "stack"]) {
+      let previous = 0;
+      for (let width = kind === "split" ? 1024 : 600; width <= (kind === "split" ? 3000 : 1023); width += 7) {
+        const { videoHeight } = core.focusLayout(width, height, 16);
+        assert.ok(videoHeight >= previous, `${width}x${height}`);
+        previous = videoHeight;
+      }
+    }
+  }
+});
+
+test("shows LingQ's floating word card in Focus Mode whenever LingQ opens it", () => {
+  assert.equal(core.wordPanelOpen({ docked: false, floating: true, pressed: false, marks: "", dismissed: null }), true);
+  assert.equal(core.wordPanelOpen({ docked: false, floating: false, pressed: true, marks: "w119", dismissed: null }), false);
+});
+
+test("shows LingQ's docked word panel only for a selection in the active sentence", () => {
+  assert.equal(core.wordPanelOpen({ docked: true, floating: false, pressed: false, marks: "w119", dismissed: null }), true);
+  // LingQ keeps the last word's panel with nothing selected.
+  assert.equal(
+    core.wordPanelOpen({ docked: true, floating: false, pressed: false, marks: "", dismissed: null }),
+    false,
+  );
+});
+
+test("shows LingQ's docked word panel after a press on a word, selected or not", () => {
+  // A click on the word LingQ's panel already shows shows it without a mark.
+  assert.equal(
+    core.wordPanelOpen({ docked: true, floating: false, pressed: true, marks: "", dismissed: null }),
+    true,
+  );
+  assert.equal(
+    core.wordPanelOpen({ docked: true, floating: false, pressed: true, marks: "w119", dismissed: "w119" }),
+    true,
+  );
+});
+
+test("keeps a docked word panel away once Escape put it away, until the selection changes", () => {
+  const panel = (marks, dismissed) =>
+    core.wordPanelOpen({ docked: true, floating: false, pressed: false, marks, dismissed });
+  assert.equal(panel("w119", "w119"), false);
+  assert.equal(panel("w127", "w119"), true);
+  assert.equal(panel("w119 w120", "w119"), true);
+});
+
+const escape = (overrides = {}) => ({
+  type: "keydown",
+  key: "Escape",
+  repeat: false,
+  altKey: false,
+  ctrlKey: false,
+  metaKey: false,
+  shiftKey: false,
+  ...overrides,
+});
+const inFocus = { focus: true, panelOpen: false, editable: false, kept: false };
+
+test("puts away an open word panel on the first Escape and leaves Focus Mode on the next", () => {
+  assert.equal(core.focusEscape(escape(), { ...inFocus, panelOpen: true }), "close-panel");
+  assert.equal(core.focusEscape(escape(), inFocus), "exit");
+});
+
+test("leaves Escape to LingQ outside Focus Mode", () => {
+  assert.equal(core.focusEscape(escape(), { ...inFocus, focus: false }), null);
+  assert.equal(core.focusEscape(escape(), { ...inFocus, focus: false, panelOpen: true }), null);
+});
+
+test("keeps every other Escape in Focus Mode from LingQ without acting on it", () => {
+  for (const overrides of [
+    { repeat: true },
+    { altKey: true },
+    { ctrlKey: true },
+    { metaKey: true },
+    { shiftKey: true },
+  ]) {
+    assert.equal(core.focusEscape(escape(overrides), inFocus), "consume", JSON.stringify(overrides));
+  }
+  assert.equal(core.focusEscape(escape(), { ...inFocus, editable: true }), "consume");
+  assert.equal(core.focusEscape(escape(), { ...inFocus, editable: true, panelOpen: true }), "consume");
+});
+
+test("keeps a held Escape that left Focus Mode from closing LingQ's video", () => {
+  const after = { ...inFocus, focus: false, kept: true };
+  assert.equal(core.focusEscape(escape({ repeat: true }), after), "consume");
+  assert.equal(core.focusEscape(escape(), after), "consume");
+});
+
+test("ignores keys other than an Escape keydown", () => {
+  assert.equal(core.focusEscape(escape({ type: "keyup" }), inFocus), null);
+  assert.equal(core.focusEscape(escape({ key: "Enter" }), inFocus), null);
+  assert.equal(core.focusEscape(escape({ key: "Esc" }), inFocus), null);
+});
