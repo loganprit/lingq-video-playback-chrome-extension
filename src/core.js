@@ -528,6 +528,24 @@
       : null;
   }
 
+  // Speed: the speed button cycles through these rates. The bridge accepts any
+  // rate YouTube's embed offers, so a rate chosen in YouTube's own menu can be
+  // set again after the player reloads.
+  const PLAYBACK_RATES = [1, 0.75, 0.5];
+
+  function nextPlaybackRate(rate) {
+    const index = PLAYBACK_RATES.indexOf(rate);
+    return index < 0 ? 1 : PLAYBACK_RATES[(index + 1) % PLAYBACK_RATES.length];
+  }
+
+  function commandRate(value) {
+    return Number.isFinite(value) && value >= 0.25 && value <= 2;
+  }
+
+  function reportedRate(value) {
+    return Number.isFinite(value) && value > 0 && value <= 16;
+  }
+
   function validGeneration(value) {
     return Number.isSafeInteger(value) && value > 0;
   }
@@ -562,15 +580,18 @@
     );
   }
 
-  function bridgeCommand(type, generation, segment) {
+  // A command to the player. The seek commands take a segment, and rate takes
+  // a playback rate.
+  function bridgeCommand(type, generation, argument) {
     if (
       !validGeneration(generation) ||
-      !["bind", "seek", "seek-play", "play", "pause"].includes(type)
+      !["bind", "seek", "seek-play", "play", "pause", "rate"].includes(type)
     ) {
       return null;
     }
     const usesSegment = ["seek", "seek-play"].includes(type);
-    if (usesSegment !== Boolean(validSegment(segment))) return null;
+    if (usesSegment !== Boolean(validSegment(argument))) return null;
+    if ((type === "rate") !== commandRate(argument)) return null;
 
     return {
       source: SOURCE,
@@ -579,15 +600,20 @@
       type,
       generation,
       ...(usesSegment
-        ? { segment: { start: segment.start, end: segment.end } }
+        ? { segment: { start: argument.start, end: argument.end } }
         : {}),
+      ...(type === "rate" ? { rate: argument } : {}),
     };
   }
 
   function parseBridgeCommand(value) {
     if (!value || typeof value !== "object") return null;
 
-    const command = bridgeCommand(value.type, value.generation, value.segment);
+    const command = bridgeCommand(
+      value.type,
+      value.generation,
+      value.type === "rate" ? value.rate : value.segment,
+    );
     return command &&
       value.source === SOURCE &&
       value.version === VERSION &&
@@ -606,7 +632,16 @@
     ];
     if (
       !validGeneration(generation) ||
-      !["ready", "state", "blocked", "error"].includes(type)
+      !["ready", "state", "blocked", "error", "rate"].includes(type)
+    ) {
+      return null;
+    }
+    if (
+      type === "rate" &&
+      (!detail ||
+        typeof detail !== "object" ||
+        Object.keys(detail).length !== 1 ||
+        !reportedRate(detail.rate))
     ) {
       return null;
     }
@@ -641,7 +676,9 @@
         ? { detail: { reason: detail.reason } }
         : type === "state"
           ? { detail: { state: detail.state, currentTime: detail.currentTime } }
-          : {}),
+          : type === "rate"
+            ? { detail: { rate: detail.rate } }
+            : {}),
     };
   }
 
@@ -691,6 +728,8 @@
     neighborCount,
     neighborSentences,
     neighborVideoHeight,
+    nextPlaybackRate,
+    PLAYBACK_RATES,
     parseBridgeCommand,
     parseBridgeEvent,
     playbackMode,

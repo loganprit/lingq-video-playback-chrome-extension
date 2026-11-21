@@ -1201,3 +1201,45 @@ test("sizes the video with neighbors so a taller window never has a smaller one"
     previous = height;
   }
 });
+
+test("cycles the speed button through 1x, 0.75x, and 0.5x", () => {
+  assert.equal(core.nextPlaybackRate(1), 0.75);
+  assert.equal(core.nextPlaybackRate(0.75), 0.5);
+  assert.equal(core.nextPlaybackRate(0.5), 1);
+});
+
+test("returns to 1x from a rate chosen in YouTube's own menu", () => {
+  assert.equal(core.nextPlaybackRate(1.5), 1);
+  assert.equal(core.nextPlaybackRate(0.25), 1);
+  assert.equal(core.nextPlaybackRate(Number.NaN), 1);
+});
+
+test("sends the player only a playback rate YouTube's embed offers", () => {
+  const rate = core.bridgeCommand("rate", 3, 0.75);
+  assert.deepEqual(core.parseBridgeCommand(rate), rate);
+  assert.equal(rate.rate, 0.75);
+  assert.deepEqual(core.parseBridgeCommand(core.bridgeCommand("rate", 3, 2)).rate, 2);
+  assert.deepEqual(core.parseBridgeCommand(core.bridgeCommand("rate", 3, 0.25)).rate, 0.25);
+
+  for (const bad of [0, 0.1, 2.5, -1, Number.NaN, Infinity, "0.75", null, undefined]) {
+    assert.equal(core.bridgeCommand("rate", 3, bad), null, String(bad));
+  }
+  assert.equal(core.bridgeCommand("rate", 0, 0.75), null);
+  assert.equal(core.bridgeCommand("play", 3, 0.75), null);
+  assert.equal(core.bridgeCommand("seek", 3, 0.75), null);
+  assert.equal(core.parseBridgeCommand({ ...rate, rate: 5 }), null);
+  assert.equal(core.parseBridgeCommand({ ...rate, segment: { start: 0, end: 1 } }), null);
+  assert.equal(core.parseBridgeCommand({ ...rate, method: "setVolume" }), null);
+});
+
+test("accepts a reported playback rate only as a positive finite number", () => {
+  const event = core.bridgeEvent("rate", 4, { rate: 1.5 });
+  assert.deepEqual(core.parseBridgeEvent(event, 4), event);
+  assert.deepEqual(event.detail, { rate: 1.5 });
+  assert.equal(core.parseBridgeEvent(event, 5), null);
+  for (const bad of [0, -1, Number.NaN, Infinity, "1"]) {
+    assert.equal(core.bridgeEvent("rate", 4, { rate: bad }), null, String(bad));
+  }
+  assert.equal(core.bridgeEvent("rate", 4), null);
+  assert.equal(core.bridgeEvent("rate", 4, { rate: 1, extra: 1 }), null);
+});

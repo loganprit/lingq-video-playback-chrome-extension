@@ -41,6 +41,10 @@ function fakePlayer({ ready }) {
           };
         },
         getCurrentTime: () => 12.5,
+        rates: [],
+        setPlaybackRate(rate) {
+          player.rates.push(rate);
+        },
         pauseVideo() {},
         playVideo() {},
         seekTo() {},
@@ -87,7 +91,12 @@ function loadBridge({ existing, get = true, frames = { widget2: existing } }) {
     id,
     src,
     closest: () => null,
-    contentWindow: fakeEmbed(index + 1, ["onStateChange", "onError", "onAutoplayBlocked"]),
+    contentWindow: fakeEmbed(index + 1, [
+      "onStateChange",
+      "onError",
+      "onAutoplayBlocked",
+      "onPlaybackRateChange",
+    ]),
   });
   const frameObjects = Object.fromEntries(
     Object.keys(frames).map((id, index) => [id, frameFor(id, index)]),
@@ -176,6 +185,9 @@ function loadBridge({ existing, get = true, frames = { widget2: existing } }) {
     bind(generation, id) {
       if (id) current = frameObjects[id];
       window.postMessage(core.bridgeCommand("bind", generation), ORIGIN);
+    },
+    send(data, origin = ORIGIN) {
+      window.postMessage(data, origin);
     },
     // Moving an iframe in the DOM reloads it into a new window.
     reload(id) {
@@ -415,14 +427,14 @@ test("re-subscribes a reloaded embed under its own widget id and origin", () => 
 
   assert.deepEqual(
     [...bridge.embed("widget2").subscriptions],
-    ["onStateChange", "onError", "onAutoplayBlocked"],
+    ["onStateChange", "onError", "onAutoplayBlocked", "onPlaybackRateChange"],
   );
 
   bridge.reload("widget2");
   bridge.announce("widget2", { origin: "https://www.youtube-nocookie.com" });
   assert.deepEqual(
     bridge.embed("widget2").origins,
-    Array(3).fill("https://www.youtube-nocookie.com"),
+    Array(4).fill("https://www.youtube-nocookie.com"),
   );
   assert.deepEqual(bridge.events, [
     core.bridgeEvent("ready", 1),
@@ -442,6 +454,47 @@ test("waits for the player after an announcement that comes first", () => {
   existing.becomeReady();
   existing.fire("onReady");
   assert.deepEqual(bridge.events, [core.bridgeEvent("ready", 1)]);
+});
+
+test("sets the bound player's playback rate", () => {
+  const existing = fakePlayer({ ready: true });
+  const bridge = loadBridge({ existing });
+
+  bridge.bind(1);
+  bridge.send(core.bridgeCommand("rate", 1, 0.75));
+  bridge.send(core.bridgeCommand("rate", 2, 0.5));
+  bridge.send({ ...core.bridgeCommand("rate", 1, 0.75), rate: 3 });
+  bridge.send(core.bridgeCommand("rate", 1, 0.5), "https://example.com");
+
+  assert.deepEqual(existing.rates, [0.75]);
+});
+
+test("reports a rate change from the player, including YouTube's own menu", () => {
+  const existing = fakePlayer({ ready: true });
+  const bridge = loadBridge({ existing });
+
+  existing.fire("onPlaybackRateChange", 0.5);
+  bridge.bind(1);
+  existing.fire("onPlaybackRateChange", 1.5);
+  existing.fire("onPlaybackRateChange", "fast");
+
+  assert.deepEqual(bridge.events, [
+    core.bridgeEvent("ready", 1),
+    core.bridgeEvent("rate", 1, { rate: 1.5 }),
+  ]);
+});
+
+test("reports rate changes again after the bound frame's embed reloads", () => {
+  const existing = fakePlayer({ ready: true });
+  const bridge = loadBridge({ existing });
+
+  bridge.announce("widget2");
+  bridge.bind(1);
+  bridge.reload("widget2");
+  bridge.announce("widget2");
+  bridge.embedEvent("widget2", "onPlaybackRateChange", 0.75);
+
+  assert.deepEqual(bridge.events.at(-1), core.bridgeEvent("rate", 1, { rate: 0.75 }));
 });
 
 const WORD = "https://s3.amazonaws.com/media.lingq.com/resources/tts/audio/esLucia_58e5b48a.mp3";

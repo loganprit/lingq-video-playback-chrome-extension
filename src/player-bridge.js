@@ -6,7 +6,7 @@
   globalThis.__lingqSentencePlayerBridge = true;
 
   const EMBED_ORIGINS = ["https://www.youtube.com", "https://www.youtube-nocookie.com"];
-  const EMBED_EVENTS = ["onStateChange", "onError", "onAutoplayBlocked"];
+  const EMBED_EVENTS = ["onStateChange", "onError", "onAutoplayBlocked", "onPlaybackRateChange"];
   const DUCK_LIMIT_MS = 10000;
   const ECHO_LIMIT_MS = 1000;
   // The video keeps playing while it buffers, so a word spoken then is ducked too.
@@ -243,6 +243,11 @@
     }
   }
 
+  // The rate changes from the companion's speed button or YouTube's own menu.
+  function onPlaybackRateChange(event) {
+    if (event.target === player && ready) emit("rate", { rate: event.data });
+  }
+
   function onAutoplayBlocked(event) {
     if (event.target !== player || !ready) return;
     stopBoundaryWatcher();
@@ -317,6 +322,7 @@
         player.addEventListener("onError", onError);
         player.addEventListener("onStateChange", onStateChange);
         player.addEventListener("onAutoplayBlocked", onAutoplayBlocked);
+        player.addEventListener("onPlaybackRateChange", onPlaybackRateChange);
       }
       waitForPlayer(expectedGeneration);
     } catch {
@@ -371,6 +377,8 @@
         if (command.type === "play" || command.type === "pause") {
           if (command.type === "pause") stopBoundaryWatcher();
           player[`${command.type}Video`]();
+        } else if (command.type === "rate") {
+          player.setPlaybackRate(command.rate);
         } else {
           seekSegment(command.segment, command.type === "seek-play");
         }
