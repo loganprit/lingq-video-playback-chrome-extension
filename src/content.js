@@ -833,10 +833,11 @@
       play,
     };
     if (play) expectPlay();
+    // A mouse event's clientX is a whole pixel, so the nearest one is used.
     const options = {
       bubbles: true,
       buttons: 1,
-      clientX: bounds.left + bounds.width * (percentage / 100),
+      clientX: Math.round(bounds.left + bounds.width * (percentage / 100)),
       clientY: bounds.top + bounds.height / 2,
     };
     for (const type of [
