@@ -201,6 +201,18 @@
   cursor: pointer;
 }
 
+/* Outside Focus Mode the two groups are one row, and only Focus Mode shows
+   Previous, Play, Next, and the speed. */
+.lspc-transport,
+.lspc-options {
+  display: contents;
+}
+
+#lesson-reader:not(.lspc-focus) .lspc-focus-only,
+#lesson-reader.lspc-focus .lspc-normal-only {
+  display: none;
+}
+
 .lspc-item:hover,
 .lspc-item[aria-expanded="true"] {
   background: rgb(127 127 127 / 10%);
@@ -526,4 +538,393 @@
     width: min(100%, max(8rem, calc((100dvh - 20rem) * 16 / 9)));
     margin-inline: auto;
   }
+}
+
+/* Focus Mode fills the window with LingQ's reader. Its grid places LingQ's
+   own parts: the four containers between the reader and the video and
+   sentence lend their children to it with display: contents, so nothing
+   moves in the DOM. core.focusLayout sizes the video. */
+#lesson-reader.lspc-focus {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 41;
+  display: grid !important;
+  width: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 2rem 1.5rem !important;
+  overflow: hidden auto;
+  column-gap: 3.5rem !important;
+  row-gap: 0 !important;
+  background: var(--readerGlobalBackground, Canvas);
+}
+
+/* From 1024px: the video and controls on the left, the sentence and the
+   neighbors or word panel on the right. */
+#lesson-reader.lspc-focus-split {
+  grid-template-columns: var(--lspc-focus-video-width) minmax(0, 1fr) !important;
+  grid-template-rows: 5rem auto auto minmax(0, 1fr) !important;
+  grid-template-areas:
+    "bar bar"
+    "stage sentence"
+    "stage resources"
+    "stage below" !important;
+}
+
+/* Narrower: one column of the video, controls, sentence, and the neighbors or
+   word panel. */
+#lesson-reader.lspc-focus-stack {
+  grid-template-columns: minmax(0, 48rem) !important;
+  grid-template-rows: 5rem auto auto auto auto minmax(10rem, 1fr) !important;
+  grid-template-areas: "bar" "video" "controls" "sentence" "resources" "below" !important;
+  justify-content: center;
+  padding-inline: 1.5rem !important;
+}
+
+#lesson-reader.lspc-focus > * {
+  grid-area: bar;
+  min-width: 0;
+}
+
+#lesson-reader.lspc-focus > .main-content,
+#lesson-reader.lspc-focus > .main-content > .reader-component,
+#lesson-reader.lspc-focus > .main-content > .reader-component > .sentence-text,
+#lesson-reader.lspc-focus > .main-content > .reader-component > .sentence-text > .loadedContent {
+  display: contents !important;
+}
+
+/* LingQ's header keeps its size, unseen, because seek sync and Neighbor
+   Sentences press its progress marks. */
+#lesson-reader.lspc-focus > .main-content > .main-header {
+  grid-area: bar;
+  align-self: start;
+  height: 0 !important;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* A press lands on a whole pixel, so the marks get several pixels each. The
+   header clips the wide row, so it adds no overflow. */
+#lesson-reader.lspc-focus > .main-content > .main-header > .container {
+  width: 8000px !important;
+  max-width: none !important;
+}
+
+#lesson-reader.lspc-focus .reader-component > :is(.nav--left, .nav--right) {
+  display: none !important;
+}
+
+.lspc-focus-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  height: 3.5rem;
+  align-self: start;
+  font-size: 0.875rem;
+}
+
+#lesson-reader.lspc-focus > .lspc-focus-bar {
+  grid-area: bar;
+}
+
+.lspc-focus-where {
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0.7;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lspc-focus-exit {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.lspc-focus-exit:hover {
+  background: rgb(127 127 127 / 10%);
+}
+
+.lspc-focus-exit:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
+.lspc-focus-exit .lspc-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.lspc-focus-exit kbd {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgb(127 127 127 / 16%);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+#lesson-reader.lspc-focus #sentence-video-player-portal.lspc-portal {
+  grid-area: video;
+  justify-self: center;
+  align-self: start;
+  width: var(--lspc-focus-video-width) !important;
+  margin: 0 !important;
+}
+
+#lesson-reader.lspc-focus-split #sentence-video-player-portal.lspc-portal {
+  grid-area: stage;
+  justify-self: start;
+}
+
+/* The controls: LingQ's footer with only the companion's row in it. */
+#lesson-reader.lspc-focus > .main-footer {
+  grid-area: controls;
+  align-self: start;
+  position: static !important;
+  height: auto !important;
+  min-height: 0 !important;
+  margin: 1rem 0 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#lesson-reader.lspc-focus-split > .main-footer {
+  grid-area: stage;
+  margin-top: calc(var(--lspc-focus-video-height) + 1.5rem) !important;
+}
+
+#lesson-reader.lspc-focus .main-footer .lesson-bottom {
+  justify-content: center !important;
+  width: auto !important;
+  max-width: none !important;
+  height: auto !important;
+  padding: 0 !important;
+}
+
+#lesson-reader.lspc-focus .main-footer .lesson-bottom > :not(.lspc-controls, .lspc-status) {
+  display: none !important;
+}
+
+#lesson-reader.lspc-focus .lspc-controls {
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px 4px;
+}
+
+#lesson-reader.lspc-focus-split .lspc-controls {
+  flex-direction: column;
+}
+
+#lesson-reader.lspc-focus :is(.lspc-transport, .lspc-options) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#lesson-reader.lspc-focus .lspc-transport {
+  gap: 12px;
+}
+
+#lesson-reader.lspc-focus .lspc-item {
+  font-size: 0.875rem;
+}
+
+#lesson-reader.lspc-focus .lspc-transport .lspc-item {
+  grid-template-rows: none;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0;
+}
+
+#lesson-reader.lspc-focus .lspc-transport .lspc-item-label {
+  display: none;
+}
+
+.lspc-solid {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* Play or Pause: a disc in the text color, the reader's background inside. */
+#lesson-reader.lspc-focus .lspc-play {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+#lesson-reader.lspc-focus .lspc-play:hover {
+  background: currentColor;
+  opacity: 0.88;
+}
+
+#lesson-reader.lspc-focus .lspc-play .lspc-icon {
+  color: Canvas;
+}
+
+.lspc-rate {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 22px;
+}
+
+#lesson-reader.lspc-focus .lspc-status {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+
+/* A popover opens up over the video while it is open, and stops short of the
+   window's top. Hover captions open down, away from YouTube's controls. */
+#lesson-reader.lspc-focus-stack .lspc-popover {
+  max-height: calc(var(--lspc-focus-video-height) + 4.5rem);
+  overflow-y: auto;
+}
+
+/* Under the video and the Play row. */
+#lesson-reader.lspc-focus-split .lspc-popover {
+  max-height: calc(var(--lspc-focus-video-height) + 9.5rem);
+  overflow-y: auto;
+}
+
+#lesson-reader.lspc-focus .lspc-item::after {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+
+/* The sentence: LingQ's own, larger. */
+#lesson-reader.lspc-focus .reader-container-wrapper {
+  grid-area: sentence;
+  align-self: start;
+  margin: 0 !important;
+}
+
+#lesson-reader.lspc-focus .sentence-text .reader-container {
+  font-size: 1.15em;
+  line-height: 1.75;
+}
+
+#lesson-reader.lspc-focus-split .sentence-text .reader-container {
+  font-size: 1.5em;
+  line-height: 1.7;
+}
+
+#lesson-reader.lspc-focus-split .sentence-text :is(.reader-container-wrapper, .sentence) {
+  margin-inline: 0;
+  text-align: start;
+}
+
+#lesson-reader.lspc-focus-stack .reader-container-wrapper {
+  margin-top: 1rem !important;
+}
+
+/* Show Translation stays under the sentence. Its list of the sentence's saved
+   words is left out, since the yellow words and the word panel cover it. */
+#lesson-reader.lspc-focus .reader-resources {
+  grid-area: resources;
+  overflow: visible !important;
+}
+
+#lesson-reader.lspc-focus .reader-resources--wrapper {
+  position: static !important;
+}
+
+#lesson-reader.lspc-focus-stack .reader-resources--wrapper > * {
+  text-align: center;
+}
+
+#lesson-reader.lspc-focus .reader-resources .resource-item--vocabulary {
+  display: none !important;
+}
+
+/* Neighbor Sentences and LingQ's word panel share the space below. */
+#lesson-reader.lspc-focus .lspc-neighbors {
+  grid-area: below;
+  align-self: stretch;
+  overflow: hidden;
+  padding-top: 0.75rem;
+}
+
+#lesson-reader.lspc-focus .lspc-neighbor {
+  font-size: 1em;
+}
+
+#lesson-reader.lspc-focus-split .lspc-neighbors {
+  align-items: flex-start;
+}
+
+#lesson-reader.lspc-focus-split .lspc-neighbor {
+  padding-inline: 0;
+  font-size: 1.2em;
+  text-align: start;
+}
+
+#lesson-reader.lspc-focus-panel .lspc-neighbors {
+  visibility: hidden;
+}
+
+#lesson-reader.lspc-focus:not(.lspc-focus-panel) > .widget-area {
+  display: none !important;
+}
+
+#lesson-reader.lspc-focus > .widget-area,
+#lesson-reader.lspc-focus > .reader-widget.is-floating {
+  grid-area: below;
+  align-self: start;
+  max-height: 100%;
+  margin-top: 0.75rem !important;
+  overflow-y: auto;
+}
+
+/* The docked panel fills the space, and LingQ's own middle section scrolls
+   between its word and its status buttons. */
+#lesson-reader.lspc-focus-panel > .widget-area {
+  position: static !important;
+  display: flex !important;
+  flex-direction: column;
+  align-self: stretch;
+  width: auto !important;
+  height: auto !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+#lesson-reader.lspc-focus > .widget-area > .reader-widget {
+  flex: 0 1 auto;
+  width: auto !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 0;
+  max-height: 100% !important;
+  margin: 0 !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: auto minmax(0, 1fr) auto !important;
+}
+
+/* LingQ's floating card docks in place. It stays positioned, so its own
+   close button stays on it. */
+#lesson-reader.lspc-focus > .reader-widget.is-floating {
+  position: relative !important;
+  inset: auto !important;
+  z-index: auto !important;
+  width: auto !important;
+  max-width: none !important;
+  justify-self: stretch;
+  transform: none !important;
 }

@@ -12,6 +12,13 @@
     autoplayBlocked: false,
     blockedFrame: null,
     boundaryArmed: false,
+    // The Escape press that left Focus Mode, whose repeats stay away from LingQ.
+    escapeKept: false,
+    // null, or Focus Mode on the reader it's applied to: { reader, bar,
+    // hadStyle, pressed, dismissed }. pressed: the position whose word was
+    // pressed since Escape last put the docked panel away. dismissed: the word
+    // selection whose docked panel Escape put away.
+    focus: null,
     cache: null,
     cueKey: null,
     frame: null,
@@ -30,6 +37,8 @@
     playerTime: 0,
     playRequest: null,
     ready: false,
+    // The playback rate for this page session, kept across player reloads.
+    rate: 1,
     recoveryAttemptedLessonKey: null,
     // The active sentence's reveal: { at, listened, requested }. listened: its
     // first play reached the Sentence Boundary. requested: the reader clicked its
@@ -113,6 +122,7 @@
       // request still waits for its player, so only a bound player drops it.
       state.playRequest = null;
     }
+    leaveFocus();
     if (layout) {
       layout.modal.classList.remove("lspc-player");
       layout.portal.classList.remove("lspc-portal");
@@ -204,6 +214,12 @@
   const ICONS = {
     replay: ["M4 12a8 8 0 1 0 2.6-5.9", "M4 4v4.5h4.5", "M10.5 9.2v5.6l4.4-2.8z"],
     chevron: ["M6 9l6 6 6-6"],
+    previous: ["M6 5v14", "M18 6l-9 6 9 6z"],
+    next: ["M18 5v14", "M6 6l9 6-9 6z"],
+    play: ["M8 5.5v13l11-6.5z"],
+    pause: ["M7 5h3.5v14H7z", "M13.5 5H17v14h-3.5z"],
+    focus: ["M4 9V4h5", "M20 9V4h-5", "M4 15v5h5", "M20 15v5h-5"],
+    exitFocus: ["M9 4v5H4", "M15 4v5h5", "M9 20v-5H4", "M15 20v-5h5"],
     check: ["M5 12.5l4.5 4.5L19 7.5"],
     settings: [
       "M4 7h8",
@@ -319,6 +335,27 @@
     if (boundaryDelay.kind === "seconds") {
       control.querySelector(".lspc-seconds").value = String(boundaryDelay.seconds);
     }
+    renderPlayback();
+  }
+
+  // The Focus Mode controls that follow the player: Play or Pause, and the rate.
+  function renderPlayback() {
+    const control = state.modeControl;
+    if (!control) return;
+    const playing = [core.PLAYER_STATES.PLAYING, core.PLAYER_STATES.BUFFERING].includes(
+      state.playerState,
+    );
+    const play = control.querySelector(".lspc-play");
+    play.setAttribute("aria-label", playing ? "Pause" : "Play");
+    play.dataset.tip = playing ? "Pause" : "Play";
+    for (const glyph of play.querySelectorAll("[data-glyph]")) {
+      glyph.classList.toggle("lspc-current", glyph.dataset.glyph === (playing ? "pause" : "play"));
+    }
+    const rate = `${state.rate}x`;
+    const speed = control.querySelector(".lspc-speed");
+    speed.setAttribute("aria-label", `Speed: ${rate}`);
+    speed.dataset.tip = `Speed ${rate}`;
+    speed.querySelector(".lspc-rate").textContent = rate;
   }
 
   // A focused control keeps the letter shortcuts for itself, so a mouse click
@@ -560,12 +597,25 @@
     return node;
   }
 
-  function footerItem(paths, label) {
-    const button = element("button", "lspc-item");
+  function footerItem(paths, label, className = "") {
+    const button = element("button", `lspc-item ${className}`.trim());
     button.type = "button";
     const text = element("span", "lspc-item-label");
     text.append(element("span", "lspc-label-text", label));
     button.append(icon(paths), text);
+    return button;
+  }
+
+  // A Focus Mode control that runs a companion action, like its shortcut.
+  function focusItem(paths, label, shortcut, action, className = "") {
+    const button = footerItem(paths, label, `lspc-focus-only ${className}`);
+    button.setAttribute("aria-label", label);
+    button.setAttribute("aria-keyshortcuts", shortcut);
+    button.dataset.tip = label;
+    button.addEventListener("click", (event) => {
+      releasePointerFocus(event);
+      action();
+    });
     return button;
   }
 
@@ -618,12 +668,43 @@
     settingsButton.setAttribute("aria-controls", "lspc-settings");
     settingsButton.dataset.tip = "Settings";
 
-    control.append(
-      replay,
+    // Focus Mode adds Previous, Play or Pause, Next, and the speed to the row,
+    // and the Focus button enters it.
+    const previous = focusItem(ICONS.previous, "Previous sentence", "P", () => navigate("previous"));
+    const next = focusItem(ICONS.next, "Next sentence", "N", () => navigate("next"));
+    const play = focusItem([], "Play", "Space", togglePlayback, "lspc-play");
+    const playGlyphs = element("span", "lspc-stack");
+    for (const mode of ["play", "pause"]) {
+      const glyph = icon(ICONS[mode], "lspc-icon lspc-solid");
+      glyph.dataset.glyph = mode;
+      playGlyphs.append(glyph);
+    }
+    play.querySelector(".lspc-icon").replaceWith(playGlyphs);
+    const speed = element("button", "lspc-item lspc-speed lspc-focus-only");
+    speed.type = "button";
+    const speedLabel = element("span", "lspc-item-label");
+    speedLabel.append(element("span", "lspc-label-text", "Speed"));
+    speed.append(element("span", "lspc-rate"), speedLabel);
+    speed.addEventListener("click", (event) => {
+      releasePointerFocus(event);
+      setRate(core.nextPlaybackRate(state.rate));
+    });
+    const focus = footerItem(ICONS.focus, "Focus", "lspc-normal-only");
+    focus.setAttribute("aria-label", "Focus Mode");
+    focus.dataset.tip = "Focus Mode";
+    focus.addEventListener("click", (event) => enterFocus(event.detail === 0));
+
+    const transport = element("div", "lspc-transport");
+    transport.append(previous, replay, play, next);
+    const options = element("div", "lspc-options");
+    options.append(
+      speed,
       element("span", "lspc-divider"),
       picker(modeButton, modeMenu()),
       picker(settingsButton, settingsPanel()),
+      focus,
     );
+    control.append(transport, options);
     footer.append(control);
     state.modeControl = control;
     render();
@@ -924,6 +1005,7 @@
     }
     reader.classList.toggle("lspc-sentence-hidden", hidden);
     renderNeighbors(context);
+    renderFocus(context);
   }
 
   // Neighbor Sentences: the text of the next few sentences, dimmed, in a list
@@ -1005,12 +1087,13 @@
     list.hidden = false;
     for (const item of items) item.hidden = false;
     // The reader scrolls inside .sentence-text, whose box stays put while
-    // every neighbor shows.
-    const free =
-      list.closest(".sentence-text").getBoundingClientRect().bottom -
-      list.getBoundingClientRect().top -
-      (Number.parseFloat(getComputedStyle(list.parentElement).rowGap) || 0) -
-      RESOURCES_FLOOR;
+    // every neighbor shows. In Focus Mode the list fills its own grid area.
+    const free = state.focus
+      ? list.clientHeight - (Number.parseFloat(getComputedStyle(list).paddingTop) || 0)
+      : list.closest(".sentence-text").getBoundingClientRect().bottom -
+        list.getBoundingClientRect().top -
+        (Number.parseFloat(getComputedStyle(list.parentElement).rowGap) || 0) -
+        RESOURCES_FLOOR;
     const count = core.neighborCount(
       items.map((item) => item.offsetHeight),
       free,
@@ -1045,6 +1128,171 @@
     // click hands it back to the page and the letter shortcuts work.
     releasePointerFocus(event);
     navigateToSentence(Number(neighbor.dataset.sentence), true);
+  }
+
+  // Focus Mode fills the window with the video, the controls, and the active
+  // sentence, using classes on LingQ's own reader. Nothing of LingQ's moves:
+  // the reader's grid places its parts, and leaving takes the classes, the
+  // reader's two size properties, and the companion's bar away again.
+  const FOCUS_CLASSES = ["lspc-focus", "lspc-focus-split", "lspc-focus-stack", "lspc-focus-panel"];
+  const FOCUS_PROPERTIES = ["--lspc-focus-video-width", "--lspc-focus-video-height"];
+
+  function focusBar() {
+    const bar = element("div", "lspc-focus-bar");
+    const exit = element("button", "lspc-focus-exit");
+    exit.type = "button";
+    exit.setAttribute("aria-keyshortcuts", "Escape");
+    exit.append(icon(ICONS.exitFocus), element("span", "", "Exit Focus"), element("kbd", "", "Esc"));
+    exit.addEventListener("click", (event) => leaveFocus(event.detail === 0));
+    bar.append(element("span", "lspc-focus-where"), exit);
+    return bar;
+  }
+
+  function enterFocus(keyboard) {
+    if (!state.layout || state.focus) return;
+    state.focus = { reader: null, bar: null, hadStyle: false, pressed: null, dismissed: null };
+    renderVisibility();
+    fitNeighbors();
+    if (keyboard) state.focus.bar?.querySelector(".lspc-focus-exit").focus();
+    else document.activeElement?.blur();
+  }
+
+  // Leaves Focus Mode. A keyboard exit returns focus to the Focus button.
+  function leaveFocus(keyboard = false) {
+    if (!state.focus) return;
+    unapplyFocus(state.focus);
+    state.focus = null;
+    fitNeighbors();
+    if (keyboard) state.modeControl?.querySelector(".lspc-normal-only").focus();
+  }
+
+  function unapplyFocus(focus) {
+    if (!focus.reader) return;
+    focus.reader.classList.remove(...FOCUS_CLASSES);
+    for (const property of FOCUS_PROPERTIES) focus.reader.style.removeProperty(property);
+    if (!focus.hadStyle && !focus.reader.getAttribute("style")) {
+      focus.reader.removeAttribute("style");
+    }
+    focus.bar?.remove();
+    focus.reader = null;
+    focus.bar = null;
+  }
+
+  // The selected words of the active sentence, as one string.
+  function selectionMarks(context) {
+    return [...(context?.sentence.querySelectorAll(".is-selected, .selected-text") || [])]
+      .map((mark) => mark.id || mark.textContent)
+      .join(" ");
+  }
+
+  function focusPanelOpen(context) {
+    const reader = state.focus?.reader;
+    return Boolean(reader) && core.wordPanelOpen({
+      docked: Boolean(reader.querySelector(":scope > .widget-area")),
+      floating: Boolean(reader.querySelector(":scope > .reader-widget.is-floating")),
+      pressed: state.focus.pressed !== null && state.focus.pressed === position(context),
+      marks: selectionMarks(context),
+      dismissed: state.focus.dismissed,
+    });
+  }
+
+  // Applies Focus Mode to the current reader, and takes it off a reader LingQ
+  // replaced. Running it again changes nothing.
+  function renderFocus(context = state.layout && readerContext()) {
+    const focus = state.focus;
+    const reader = state.layout?.reader;
+    if (!focus) return;
+    if (focus.reader !== reader) unapplyFocus(focus);
+    if (!reader) return;
+    if (!focus.reader) {
+      focus.reader = reader;
+      focus.hadStyle = reader.hasAttribute("style");
+      focus.bar = focusBar();
+      reader.append(focus.bar);
+    } else if (focus.bar.parentNode !== reader) {
+      reader.append(focus.bar);
+    }
+    const root = document.documentElement;
+    const layout = core.focusLayout(
+      root.clientWidth,
+      root.clientHeight,
+      Number.parseFloat(getComputedStyle(root).fontSize),
+    );
+    // toggle, unlike add, leaves a class already there untouched, so the
+    // class observer that runs this sees no change and stops.
+    reader.classList.toggle("lspc-focus", true);
+    reader.classList.toggle("lspc-focus-split", layout.kind === "split");
+    reader.classList.toggle("lspc-focus-stack", layout.kind === "stack");
+    reader.classList.toggle("lspc-focus-panel", focusPanelOpen(context));
+    reader.style.setProperty("--lspc-focus-video-width", `${layout.videoWidth}px`);
+    reader.style.setProperty("--lspc-focus-video-height", `${layout.videoHeight}px`);
+    const number = Number(context?.sentence.id.slice(1));
+    const where = `${number || ""} / ${state.sentences?.length || ""} · ${document.title}`;
+    const label = focus.bar.querySelector(".lspc-focus-where");
+    if (label.textContent !== where) label.textContent = where;
+  }
+
+  // Escape in Focus Mode puts away an open word panel, then leaves. It never
+  // reaches LingQ's document, whose listeners would close the video. This
+  // listener runs after LingQ's own and the companion's popovers', which keep
+  // their Escape.
+  function handleFocusEscape(event) {
+    if (event.type === "keyup") {
+      if (event.key === "Escape") state.escapeKept = false;
+      return;
+    }
+    const context = state.focus && readerContext();
+    const action = core.focusEscape(event, {
+      focus: Boolean(state.focus?.reader),
+      panelOpen: focusPanelOpen(context),
+      editable: targetKind(event.target).editable,
+      kept: state.escapeKept,
+    });
+    if (!action) return;
+    event.stopPropagation();
+    if (action === "exit") {
+      state.escapeKept = true;
+      leaveFocus();
+    } else if (action === "close-panel") {
+      closeWordPanel(context);
+    }
+  }
+
+  // LingQ closes its floating card on Escape, so the companion uses the card's
+  // own close button. LingQ's docked panel has none and keeps the word
+  // selected, so Focus Mode puts the panel away until the selection changes.
+  function closeWordPanel(context) {
+    const close = state.focus.reader.querySelector(
+      ":scope > .reader-widget.is-floating .widget-close-trigger",
+    );
+    if (close) close.click();
+    else {
+      state.focus.pressed = null;
+      state.focus.dismissed = selectionMarks(context);
+    }
+    renderVisibility();
+  }
+
+  // A press on a word of the sentence shows LingQ's docked panel, even for
+  // the word it already shows, which LingQ doesn't mark.
+  function handleFocusPress(event) {
+    if (!state.focus || !event.isTrusted) return;
+    const context = readerContext();
+    const word = event.target?.closest?.(".sentence-item");
+    if (word && context?.sentence.contains(word)) {
+      state.focus.pressed = position(context);
+      state.focus.dismissed = null;
+      renderVisibility();
+    }
+  }
+
+  function setRate(rate) {
+    if (!state.ready) return;
+    const command = core.bridgeCommand("rate", state.generation, rate);
+    if (!command) return;
+    state.rate = rate;
+    renderPlayback();
+    postBridgeCommand(command);
   }
 
   function requestReveal(context) {
@@ -1312,6 +1560,14 @@
       state.recoveryAttemptedLessonKey = null;
       setStatus("ready");
       cuePending();
+      // A reloaded player starts at 1x, so the page session's rate goes back.
+      if (state.rate !== 1) setRate(state.rate);
+      return;
+    }
+
+    if (event.type === "rate") {
+      state.rate = event.detail.rate;
+      renderPlayback();
       return;
     }
 
@@ -1338,6 +1594,7 @@
       const pendingPlayback = state.playbackQueue[0];
       if (!pendingPlayback || pendingPlayback.expectedState === event.detail.state) {
         state.playerState = event.detail.state;
+        renderPlayback();
       }
       if (pendingPlayback?.expectedState === event.detail.state) {
         state.playbackQueue.shift();
@@ -1494,11 +1751,22 @@
     },
     true,
   );
+  // The root's bubble phase comes after LingQ's React handlers and before its
+  // document listeners.
+  document.documentElement.addEventListener("keydown", handleFocusEscape);
+  document.documentElement.addEventListener("keyup", handleFocusEscape);
+  window.addEventListener("pointerdown", handleFocusPress, true);
+  window.addEventListener("resize", () => {
+    if (!state.focus) return;
+    renderFocus();
+    fitNeighbors();
+  });
   window.addEventListener("keydown", handleRevealKey, true);
   window.addEventListener("keyup", handleRevealKey, true);
   window.addEventListener("keydown", handleNeighborEvent, true);
   window.addEventListener("keyup", handleNeighborEvent, true);
   window.addEventListener("blur", () => {
+    state.escapeKept = false;
     state.keysKept.clear();
     state.pointerKept = false;
   });
