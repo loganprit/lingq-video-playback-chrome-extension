@@ -166,7 +166,7 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 ### Focus Button
 
 - **Button:** a footer item with four corner brackets over "Focus", after Settings, with the accessible name "Focus Mode". Focus Mode hides it. Pressing it from the keyboard moves focus to Exit Focus. A held `Enter` toggles once.
-- **Double click:** entering can put LingQ's word panel, with its status buttons, under the pointer, and leaving puts LingQ's header under Exit Focus. So the rest of a double click on either, a press within 1 s and 8px, never reaches LingQ, as with a Neighbor Sentence.
+- **Double click:** entering can put LingQ's word panel, with its status buttons, under the pointer, and leaving puts LingQ's header under Exit Focus. So the rest of a double click on either, a press within 1 s and 8px, never reaches LingQ, as with a Neighbor Sentence. Each such press starts the second again, so a triple click or a run of clicks stays away to its last press.
 
 ### Focus Bar
 
