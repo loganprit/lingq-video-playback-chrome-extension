@@ -424,6 +424,74 @@
   outline-offset: 1px;
 }
 
+/* Timing Offset: a name, a stepper around its value, and the shift's reset,
+   in columns shared by both rows. */
+.lspc-timing {
+  display: grid;
+  grid-template-columns: 1fr 40px 4.5rem 40px 4rem;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 2px 10px 6px;
+}
+
+.lspc-step,
+.lspc-timing-reset {
+  min-height: 36px;
+  padding: 0;
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.lspc-step {
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(127 127 127 / 35%);
+  background: transparent;
+}
+
+.lspc-step .lspc-icon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.8;
+}
+
+.lspc-timing-reset {
+  border: 0;
+  background: transparent;
+  font-size: 0.75rem;
+}
+
+.lspc-step:hover,
+.lspc-timing-reset:hover {
+  background: rgb(127 127 127 / 10%);
+}
+
+.lspc-step[aria-disabled="true"],
+.lspc-timing-reset[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.lspc-step[aria-disabled="true"]:hover,
+.lspc-timing-reset[aria-disabled="true"]:hover {
+  background: transparent;
+}
+
+.lspc-step:focus-visible,
+.lspc-timing-reset:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 1px;
+}
+
+.lspc-timing-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: center;
+}
+
 /* The countdown of a running Boundary Delay: a ring that empties as the
    wait runs out, over the seconds left. */
 .lspc-ring circle {
