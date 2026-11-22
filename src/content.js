@@ -910,7 +910,7 @@
     state.timingWrite = state.timingWrite
       .then(() => chrome.storage.local.get(core.TIMING_KEY))
       .then((stored) => {
-        const record = core.savedTiming(stored[core.TIMING_KEY], timing.key, offset);
+        const record = core.savedTiming(stored[core.TIMING_KEY], timing.key, offset, Date.now());
         return Object.keys(record).length
           ? chrome.storage.local.set({ [core.TIMING_KEY]: record })
           : chrome.storage.local.remove(core.TIMING_KEY);
@@ -922,15 +922,22 @@
     if (command) window.postMessage(command, location.origin);
   }
 
-  // The active sentence's bounds changed with its Timing Offset. A play goes
-  // on and ends at the new end. Otherwise the sentence is cued again, paused
-  // at its new start.
+  // The active sentence's bounds changed with its Timing Offset. A play under
+  // way is retimed: the bridge keeps it inside the new bounds. A play still
+  // starting would report a time from the old bounds, so it starts again at
+  // the new start. A paused sentence is cued again at its new start.
   function retimeCue(cue) {
-    const playing =
-      state.synchronizing === "play" ||
-      !core.videoPaused(state.playerState, Date.now() < state.playPendingUntil);
-    if (!playing) state.boundaryArmed = false;
-    postBridgeCommand(core.bridgeCommand(playing ? "retime" : "seek", state.generation, cue.segment));
+    const starting = state.synchronizing === "play" || Date.now() < state.playPendingUntil;
+    const expected = state.playbackQueue.at(-1)?.expectedState ?? state.playerState;
+    const playing = [core.PLAYER_STATES.PLAYING, core.PLAYER_STATES.BUFFERING].includes(expected);
+    if (starting) {
+      state.synchronizing = "play";
+      expectPlay();
+      state.ignoreResetUntil = Date.now() + 1000;
+    }
+    if (starting || !playing) state.boundaryArmed = false;
+    const type = starting ? "seek-play" : playing ? "retime" : "seek";
+    postBridgeCommand(core.bridgeCommand(type, state.generation, cue.segment));
     state.cueKey = cue.key;
   }
 
@@ -1032,8 +1039,8 @@
       state.navigation?.target === context.sentence.id && state.navigation.play;
     // The segment Continue plays: on through a padded overlap rather than
     // back to the segment's start.
-    const resumeAt = play ? state.navigation.resumeAt : null;
-    const continued = resumeAt == null ? null : core.continuedSegment(segment, resumeAt);
+    const resume = play ? state.navigation.resume : null;
+    const continued = resume ? core.continuedSegment(segment, resume.time, resume.after) : null;
     if (state.navigation && context.sentence.id !== state.navigation.from) {
       state.navigation = null;
     }
@@ -1070,14 +1077,17 @@
     return true;
   }
 
-  // resumeAt: where Continue left the video, which the next sentence plays on
-  // from when that lies inside its padded segment. The click arms the
-  // navigation again as LingQ's own, so resumeAt is set after it.
-  function navigate(direction, resumeAt = null) {
+  // continuing: Continue moves on, so the next sentence may play on from
+  // where the video stopped (core.continuedSegment). The click arms the
+  // navigation again as LingQ's own, so resume is set after it.
+  function navigate(direction, continuing = false) {
     const owner = navigationOwner(direction);
+    const after = state.segment?.end;
     if (!owner || !armNavigation(direction)) return;
     owner.click();
-    if (state.navigation) state.navigation.resumeAt = resumeAt;
+    if (state.navigation && continuing) {
+      state.navigation.resume = { time: state.playerTime, after };
+    }
   }
 
   function navigateToSentence(sentenceNumber, play) {
@@ -1689,7 +1699,7 @@
   }
 
   function runBoundaryAction(action) {
-    if (action === "next") navigate("next", state.playerTime);
+    if (action === "next") navigate("next", true);
     else if (action === "repeat") replayNow();
     else {
       state.synchronizing = "pause";
@@ -1728,7 +1738,7 @@
     );
     cancelWait();
     if (release === "next" && navigationOwner("next")) {
-      navigate("next", state.playerTime);
+      navigate("next", true);
       return;
     }
     if (release === "repeat") {

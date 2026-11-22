@@ -541,7 +541,7 @@ test("moves a playing segment's Sentence Boundary on a retime without seeking", 
   existing.fire("onStateChange", core.PLAYER_STATES.PLAYING);
   const before = bridge.events.length;
 
-  // The video stands at 12.5. A later end keeps the play going.
+  // The video stands at 12.5, inside the new bounds: the play goes on.
   bridge.send(core.bridgeCommand("retime", 1, { start: 10, end: 14 }));
   assert.equal(bridge.events.length, before);
 
@@ -551,6 +551,22 @@ test("moves a playing segment's Sentence Boundary on a retime without seeking", 
     core.bridgeEvent("state", 1, { state: core.PLAYER_STATES.ENDED, currentTime: 12 }),
   ]);
   assert.deepEqual(seeks, []);
+});
+
+test("seeks a playing segment to a new start still ahead of the video", () => {
+  const existing = fakePlayer({ ready: true });
+  const calls = [];
+  existing.seekTo = (time) => calls.push(`seek ${time}`);
+  existing.playVideo = () => calls.push("play");
+  const bridge = loadBridge({ existing });
+  bridge.bind(1);
+  existing.fire("onStateChange", core.PLAYER_STATES.PLAYING);
+  const before = bridge.events.length;
+
+  bridge.send(core.bridgeCommand("retime", 1, { start: 13, end: 16 }));
+
+  assert.deepEqual(calls, ["seek 13", "play"]);
+  assert.equal(bridge.events.length, before);
 });
 
 test("only takes a paused segment's new bounds on a retime", () => {

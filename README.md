@@ -69,9 +69,9 @@ Some lessons' timestamps are early or late for every sentence, which clips each 
 - **Shift** moves every sentence of the lesson earlier (`−`) or later (`+`) in 0.1 s steps, up to 5 s either way. **Reset** puts it back at 0.0 s. The panel shows the current value, such as "+0.5 s".
 - **Pad** lengthens both ends of every sentence, from 0 to 0.5 s in 0.05 s steps, so first and last syllables aren't cut. It starts at 0.
 - Everything the companion plays uses the offset: the cued sentence, its end, Replay, Repeat, Continue, `N` and `P`, Neighbor Sentences, and a YouTube seek. It works the same in every Playback Mode and in Focus Mode.
-- A change applies at once. A sentence that's playing goes on and stops at its new end, or right away if that end has already passed. A paused sentence is cued again at its new start, so Play then plays it with the new offset.
-- A seek picks the sentence by the shifted times. Pad isn't counted there, except that a time inside the playing sentence's padded start or end keeps that sentence.
-- With a pad, one sentence's end can reach into the next one's start. Continue then plays on from where the first sentence stopped, so the overlap isn't heard twice.
+- A change applies at once. A sentence that's playing goes on and stops at its new end. If that end has already passed, it stops right away, and if its new start is still ahead, the video moves to that start. A play that's only starting starts again at the new start. A paused sentence is cued again at its new start, so Play then plays it with the new offset.
+- A seek picks the sentence by the shifted times. Pad isn't counted there, except that a time inside the active sentence's padded start or end, or up to 0.25 s before its start, keeps that sentence.
+- With a pad, one sentence's end can reach into the next one's start. Continue then plays on from where the first sentence stopped, so the overlap isn't heard twice. Without an overlap, Continue works as it does with no offset.
 - No sentence starts before 0 or ends after the video. One shifted past either end keeps its last 0.1 s there.
 - Offsets are saved per lesson. A lesson set back to no shift and no pad is removed from storage, and only the 200 most recently changed lessons are kept.
 

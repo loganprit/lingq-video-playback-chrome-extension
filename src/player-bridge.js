@@ -181,9 +181,11 @@
     emit("duration", { duration });
   }
 
-  // A Timing Offset changed while the segment plays: the play goes on, and its
-  // Sentence Boundary moves to the new end. An end now behind the video is
-  // reached at once.
+  // A Timing Offset changed while the segment plays. Inside the new bounds the
+  // play goes on, and the boundary watcher, which reads activeSegment, stops
+  // at the new end. An end now behind the video is reached at once, and a
+  // start still ahead of it is sought, so the play never runs outside the
+  // segment it now belongs to.
   function retimeSegment(segment) {
     activeSegment = segment;
     if (!AUDIBLE_STATES.includes(player.getPlayerState?.())) return;
@@ -191,8 +193,10 @@
     if (currentTime >= segment.end) {
       stopBoundaryWatcher();
       emit("state", { state: core.PLAYER_STATES.ENDED, currentTime: segment.end });
-    } else if (boundaryTimer !== null) {
-      watchBoundary(currentTime);
+    } else if (currentTime < segment.start) {
+      stopBoundaryWatcher();
+      player.seekTo(segment.start, true);
+      player.playVideo();
     }
   }
 
