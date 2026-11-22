@@ -1262,10 +1262,6 @@
   // listener runs after LingQ's own and the companion's popovers', which keep
   // their Escape.
   function handleFocusEscape(event) {
-    if (event.type === "keyup") {
-      if (event.key === "Escape") state.escapeKept = false;
-      return;
-    }
     const context = state.focus && readerContext();
     const action = core.focusEscape(event, {
       focus: Boolean(state.focus?.reader),
@@ -1791,8 +1787,6 @@
     },
     true,
   );
-  // The root's bubble phase comes after LingQ's React handlers and before its
-  // document listeners.
   window.addEventListener(
     "keydown",
     (event) => {
@@ -1800,8 +1794,18 @@
     },
     true,
   );
+  // An Escape's release ends its press wherever it lands. A capture listener
+  // here runs before anything, such as a menu button, can stop the keyup.
+  window.addEventListener(
+    "keyup",
+    (event) => {
+      if (event.key === "Escape") state.escapeKept = false;
+    },
+    true,
+  );
+  // The root's bubble phase comes after LingQ's React handlers and before its
+  // document listeners.
   document.documentElement.addEventListener("keydown", handleFocusEscape);
-  document.documentElement.addEventListener("keyup", handleFocusEscape);
   window.addEventListener("pointerdown", handleFocusPress, true);
   window.addEventListener("resize", () => {
     if (!state.focus) return;
