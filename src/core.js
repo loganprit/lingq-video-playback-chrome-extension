@@ -85,12 +85,14 @@
   // The sentence a settled seek selects. A Timing Offset's shift moves every
   // sentence alike, so the time maps through LingQ's bounds moved by the shift.
   // Pad is left out, so padded neighbors never overlap here. The active
-  // sentence keeps any time inside its own played segment (segment), so its
-  // padded start or end never moves LingQ to a neighbor.
+  // sentence keeps any time inside its own played segment (segment), or as
+  // far before it as a play resumes (RESUME_WINDOW), so its padded start or
+  // end, or a play that resumed just short of it, never moves LingQ to a
+  // neighbor.
   function seekTarget(sentences, currentSentence, time, settled, synchronizing, timing = {}) {
     if (!settled || synchronizing || !Number.isSafeInteger(currentSentence)) return null;
     const { shift = 0, segment = null } = timing;
-    if (segment && time >= segment.start && time < segment.end) return null;
+    if (segment && time >= segment.start - RESUME_WINDOW && time < segment.end) return null;
     const target = sentenceAtTime(sentences, time - shift);
     return target && target !== currentSentence ? target : null;
   }
@@ -118,20 +120,23 @@
   }
 
   // A sentence's bounds as the companion plays them: LingQ's bounds moved by
-  // the shift and widened by the pad, within 0 and the video's duration (when
-  // known), rounded to the millisecond. A sentence pushed past an end keeps
-  // TIMING_MIN_SEGMENT there, so its start stays before its end.
+  // the shift and widened by the pad, rounded to the millisecond, within 0 and
+  // the video's duration (when known). A sentence pushed past an end keeps
+  // TIMING_MIN_SEGMENT there, so its start stays before its end. The rounding
+  // comes first, so a float residue can't round the end down onto the start.
   function offsetSegment(bounds, offset, duration) {
     const { shift, pad } = timingOffset(offset);
     const limit = Number.isFinite(duration) && duration > 0 ? duration : Infinity;
-    const within = (time) => Math.min(limit, Math.max(0, time));
-    let start = within(bounds.start + shift - pad);
-    let end = within(bounds.end + shift + pad);
+    // With no offset, LingQ's bounds pass unrounded.
+    const round = shift || pad ? (time) => Math.round(time * 1000) / 1000 : (time) => time;
+    const at = (time) => Math.min(limit, Math.max(0, round(time)));
+    let start = at(bounds.start + shift - pad);
+    let end = at(bounds.end + shift + pad);
     if (end <= start) {
-      end = Math.min(limit, start + TIMING_MIN_SEGMENT);
-      start = Math.max(0, end - TIMING_MIN_SEGMENT);
+      end = at(start + TIMING_MIN_SEGMENT);
+      start = at(end - TIMING_MIN_SEGMENT);
     }
-    return { start: Math.round(start * 1000) / 1000, end: Math.round(end * 1000) / 1000 };
+    return { start, end };
   }
 
   // How the settings panel shows an offset: "+0.5 s", "−0.3 s", or "0.0 s"
@@ -142,18 +147,27 @@
     return { shift: `${sign}${Math.abs(shift).toFixed(1)} s`, pad: `${pad.toFixed(2)} s` };
   }
 
-  // The segment Continue plays next. A padded end can run into the next
-  // sentence's padded start, so when the video already stands inside the
-  // next segment, it plays on from there instead of hearing the overlap twice.
-  function continuedSegment(segment, time) {
-    return Number.isFinite(time) && time > segment.start && time < segment.end
+  // The segment Continue plays next. With a pad, the previous segment's end
+  // (previousEnd) can lie past the next segment's start. When the video
+  // stopped there, within the RESUME_WINDOW the bridge allows for lag, it
+  // plays on from where it stands instead of hearing the overlap twice. Any
+  // other time, such as a seek during a Boundary Delay, and any lesson without
+  // an overlap, plays the next segment as it is.
+  function continuedSegment(segment, time, previousEnd) {
+    return Number.isFinite(time) &&
+      previousEnd > segment.start &&
+      time >= previousEnd &&
+      time <= previousEnd + RESUME_WINDOW &&
+      time < segment.end
       ? { start: time, end: segment.end }
       : segment;
   }
 
-  // Stored Timing Offsets: one record of lesson key to offset, kept apart from
-  // the settings record. A lesson back at no shift and no pad leaves it, and
-  // only the most recently changed TIMING_LESSON_LIMIT lessons stay.
+  // Stored Timing Offsets: one record of lesson key to { shift, pad, changed },
+  // kept apart from the settings record. changed is when the lesson's offset
+  // last changed, in ms. A lesson back at no shift and no pad leaves it, and
+  // only the TIMING_LESSON_LIMIT most recently changed lessons stay. Storage
+  // returns a record's keys sorted, so changed decides, not key order.
   const TIMING_KEY = "timingOffsets";
   const TIMING_LESSON_LIMIT = 200;
 
@@ -165,13 +179,14 @@
     return timingOffset(timingRecord(record)[lessonKey]);
   }
 
-  function savedTiming(record, lessonKey, offset) {
+  function savedTiming(record, lessonKey, offset, now) {
     const next = { ...timingRecord(record) };
     delete next[lessonKey];
     const value = timingOffset(offset);
-    if (value.shift || value.pad) next[lessonKey] = value;
-    const keys = Object.keys(next);
-    for (const key of keys.slice(0, Math.max(0, keys.length - TIMING_LESSON_LIMIT))) {
+    if (value.shift || value.pad) next[lessonKey] = { ...value, changed: now };
+    const changed = (key) => (Number.isFinite(next[key]?.changed) ? next[key].changed : 0);
+    const oldest = Object.keys(next).sort((a, b) => changed(a) - changed(b));
+    for (const key of oldest.slice(0, Math.max(0, oldest.length - TIMING_LESSON_LIMIT))) {
       delete next[key];
     }
     return next;
@@ -235,12 +250,16 @@
     return "play";
   }
 
+  // A play cued within this many seconds of where the video stands resumes
+  // there rather than seek.
+  const RESUME_WINDOW = 0.25;
+
   function segmentTransition(play, currentTime, segment) {
     return play &&
       validSegment(segment) &&
       Number.isFinite(currentTime) &&
-      currentTime >= segment.start - 0.25 &&
-      currentTime <= segment.start + 0.25 &&
+      currentTime >= segment.start - RESUME_WINDOW &&
+      currentTime <= segment.start + RESUME_WINDOW &&
       currentTime < segment.end
       ? "resume"
       : "seek";

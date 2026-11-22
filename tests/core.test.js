@@ -95,6 +95,10 @@ test("leaves LingQ's bounds alone without a Timing Offset", () => {
   const bounds = { start: 32.55, end: 44.65 };
   assert.deepEqual(core.offsetSegment(bounds, { shift: 0, pad: 0 }, 300), bounds);
   assert.deepEqual(core.offsetSegment(bounds, undefined, null), bounds);
+  assert.deepEqual(core.offsetSegment({ start: 1.23456, end: 2.34567 }, {}, null), {
+    start: 1.23456,
+    end: 2.34567,
+  });
 });
 
 test("shifts and pads a sentence's bounds", () => {
@@ -138,6 +142,40 @@ test("clamps offset bounds at 0 and at the video's duration", () => {
   });
 });
 
+test("never collapses offset bounds onto one time, across every step", () => {
+  // Float residues that once rounded an end down onto a start of 0.
+  assert.deepEqual(core.offsetSegment({ start: 0.3, end: 1 }, { shift: -1.2, pad: 0.2 }, 25), {
+    start: 0,
+    end: 0.1,
+  });
+  assert.deepEqual(core.offsetSegment({ start: 0, end: 4.7 }, { shift: -5, pad: 0.3 }, 25), {
+    start: 0,
+    end: 0.1,
+  });
+  const failures = [];
+  for (const duration of [null, 25.021, 59.981, 1454.521]) {
+    const top = duration ?? 60;
+    for (const base of [0, 0.3, 1.1, 4.7, top - 4.7, top - 1, top - 0.3]) {
+      for (const length of [0.01, 0.1, 0.7, 2.9, 4.7]) {
+        const start = Math.round(base * 100) / 100;
+        const bounds = { start, end: Math.round((start + length) * 100) / 100 };
+        for (let shift = -50; shift <= 50; shift += 1) {
+          for (let pad = 0; pad <= 10; pad += 1) {
+            const segment = core.offsetSegment(bounds, { shift: shift / 10, pad: pad / 20 }, duration);
+            const valid =
+              segment.start >= 0 &&
+              segment.end > segment.start &&
+              (duration === null || segment.end <= duration) &&
+              core.bridgeCommand("seek", 1, segment) !== null;
+            if (!valid) failures.push({ bounds, shift, pad, duration, segment });
+          }
+        }
+      }
+    }
+  }
+  assert.deepEqual(failures.slice(0, 3), []);
+});
+
 test("maps a seek through the shifted bounds", () => {
   const sentences = [
     { timestamp: [32.55, 44.65] },
@@ -174,47 +212,86 @@ test("keeps the active sentence for a seek inside its padded segment", () => {
   assert.equal(core.seekTarget(sentences, 1, 46, true, false, { segment: s1 }), 2);
 });
 
-test("continues into a padded overlap from where the video stands", () => {
-  const next = { start: 44.25, end: 50.5 };
+test("keeps the active sentence for a play that resumed just short of its start", () => {
+  const sentences = [
+    { timestamp: [0.5, 3.4] },
+    { timestamp: [3.5, 6.4] },
+  ];
+  // s2 shifted 0.2 s later starts at 3.7. A play that resumed at 3.5 maps
+  // through the shift to s1, but lies within the resume window of s2.
+  const segment = { start: 3.7, end: 6.6 };
+  assert.equal(core.seekTarget(sentences, 2, 3.5, true, false, { shift: 0.2, segment }), null);
+  assert.equal(core.seekTarget(sentences, 2, 3.4, true, false, { shift: 0.2, segment }), 1);
+});
 
-  assert.deepEqual(core.continuedSegment(next, 45.15), { start: 45.15, end: 50.5 });
-  // Without an overlap the next sentence plays from its own start.
-  assert.deepEqual(core.continuedSegment(next, 44.1), next);
-  assert.deepEqual(core.continuedSegment(next, 50.5), next);
-  assert.deepEqual(core.continuedSegment(next, Number.NaN), next);
+test("continues into a padded overlap from where the previous sentence stopped", () => {
+  // s11 padded ends at 45.45, inside s12's padded segment.
+  const next = { start: 44.95, end: 51.37 };
+
+  assert.deepEqual(core.continuedSegment(next, 45.45, 45.45), { start: 45.45, end: 51.37 });
+  // A pause that lands a little past the end, within the bridge's lag window.
+  assert.deepEqual(core.continuedSegment(next, 45.6, 45.45), { start: 45.6, end: 51.37 });
+  // A seek during a Boundary Delay plays the next sentence from its start.
+  assert.deepEqual(core.continuedSegment(next, 48, 45.45), next);
+  assert.deepEqual(core.continuedSegment(next, 45, 45.45), next);
+  assert.deepEqual(core.continuedSegment(next, Number.NaN, 45.45), next);
+});
+
+test("never changes Continue without an overlap, as with no Timing Offset", () => {
+  // A gap, contiguous sentences, and a pause that overshot into the next one.
+  assert.deepEqual(core.continuedSegment({ start: 44.75, end: 50.57 }, 44.65, 44.65), {
+    start: 44.75,
+    end: 50.57,
+  });
+  for (const time of [3.5, 3.6, 3.85]) {
+    assert.deepEqual(core.continuedSegment({ start: 3.5, end: 6.5 }, time, 3.5), {
+      start: 3.5,
+      end: 6.5,
+    });
+  }
 });
 
 test("stores a lesson's Timing Offset and drops it back at no shift and no pad", () => {
-  const one = core.savedTiming(undefined, "es:1", { shift: 0.5, pad: 0 });
-  assert.deepEqual(one, { "es:1": { shift: 0.5, pad: 0 } });
+  const one = core.savedTiming(undefined, "es:1", { shift: 0.5, pad: 0 }, 10);
+  assert.deepEqual(one, { "es:1": { shift: 0.5, pad: 0, changed: 10 } });
   assert.deepEqual(core.storedTiming(one, "es:1"), { shift: 0.5, pad: 0 });
   assert.deepEqual(core.storedTiming(one, "es:2"), { shift: 0, pad: 0 });
 
-  const two = core.savedTiming(one, "es:2", { shift: 0, pad: 0.1 });
-  assert.deepEqual(two, { "es:1": { shift: 0.5, pad: 0 }, "es:2": { shift: 0, pad: 0.1 } });
-  assert.deepEqual(core.savedTiming(two, "es:1", { shift: 0, pad: 0 }), {
-    "es:2": { shift: 0, pad: 0.1 },
+  const two = core.savedTiming(one, "es:2", { shift: 0, pad: 0.1 }, 20);
+  assert.deepEqual(two, {
+    "es:1": { shift: 0.5, pad: 0, changed: 10 },
+    "es:2": { shift: 0, pad: 0.1, changed: 20 },
   });
-  assert.deepEqual(core.savedTiming({ "es:1": { shift: 1, pad: 0 } }, "es:1", {}), {});
+  assert.deepEqual(core.savedTiming(two, "es:1", { shift: 0, pad: 0 }, 30), {
+    "es:2": { shift: 0, pad: 0.1, changed: 20 },
+  });
+  assert.deepEqual(core.savedTiming({ "es:1": { shift: 1, pad: 0 } }, "es:1", {}, 30), {});
   assert.deepEqual(core.storedTiming("broken", "es:1"), { shift: 0, pad: 0 });
-  assert.deepEqual(core.savedTiming(["broken"], "es:1", { shift: 1 }), {
-    "es:1": { shift: 1, pad: 0 },
+  assert.deepEqual(core.savedTiming(["broken"], "es:1", { shift: 1 }, 30), {
+    "es:1": { shift: 1, pad: 0, changed: 30 },
   });
 });
 
-test("keeps only the 200 most recently changed lessons' Timing Offsets", () => {
-  let record = {};
-  for (let lesson = 1; lesson <= 201; lesson += 1) {
-    record = core.savedTiming(record, `es:${lesson}`, { shift: 0.1, pad: 0 });
+test("keeps only the 200 most recently changed lessons' Timing Offsets, whatever the key order", () => {
+  // Storage hands the record back with its keys sorted, so key order says
+  // nothing about when a lesson changed. Here es:200 changed first.
+  const record = {};
+  for (let lesson = 1; lesson <= 200; lesson += 1) {
+    record[`es:${lesson}`] = { shift: 0.1, pad: 0, changed: 1000 - lesson };
   }
-  assert.equal(Object.keys(record).length, 200);
-  assert.equal("es:1" in record, false);
+  const sorted = Object.fromEntries(Object.entries(record).sort(([a], [b]) => a.localeCompare(b)));
+
+  const next = core.savedTiming(sorted, "es:999", { shift: 0.2, pad: 0 }, 5000);
+  assert.equal(Object.keys(next).length, 200);
+  assert.equal("es:200" in next, false);
+  assert.equal("es:1" in next, true);
+  assert.equal("es:999" in next, true);
 
   // Changing a lesson again makes it the most recent.
-  record = core.savedTiming(record, "es:2", { shift: 0.2, pad: 0 });
-  record = core.savedTiming(record, "es:202", { shift: 0.1, pad: 0 });
-  assert.equal("es:2" in record, true);
-  assert.equal("es:3" in record, false);
+  const again = core.savedTiming(next, "es:199", { shift: 0.3, pad: 0 }, 6000);
+  const after = core.savedTiming(again, "es:1000", { shift: 0.1, pad: 0 }, 7000);
+  assert.equal("es:199" in after, true);
+  assert.equal("es:198" in after, false);
 });
 
 test("cues initially only when both player and active bounds are valid", () => {
