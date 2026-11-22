@@ -165,7 +165,8 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 
 ### Focus Button
 
-- **Button:** a footer item with four corner brackets over "Focus", after Settings, with the accessible name "Focus Mode". Focus Mode hides it. Pressing it from the keyboard moves focus to Exit Focus.
+- **Button:** a footer item with four corner brackets over "Focus", after Settings, with the accessible name "Focus Mode". Focus Mode hides it. Pressing it from the keyboard moves focus to Exit Focus. A held `Enter` toggles once.
+- **Double click:** entering can put LingQ's word panel, with its status buttons, under the pointer, and leaving puts LingQ's header under Exit Focus. So the rest of a double click on either, a press within 1 s and 8px, never reaches LingQ, as with a Neighbor Sentence.
 
 ### Focus Bar
 
@@ -174,7 +175,7 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 
 ### Focus Mode Controls
 
-- **Rows:** split, the transport (Previous, Replay, Play or Pause, Next) sits centered over the options (Speed, the divider, Playback Mode, Settings). Stacked, they share one centered row. Transport items are icon-only 48px targets with hover captions, which open downward, away from YouTube's controls. The options keep their labels at `0.875rem` at every width.
+- **Rows:** split, the transport (Previous, Replay, Play or Pause, Next) sits centered over the options (Speed, the divider, Playback Mode, Settings). Stacked, they share one centered row. Transport items are icon-only 48px targets. The options keep their labels at `0.875rem` while LingQ's footer is at least 37rem wide. Narrower, as in a split window at 1024×768, where the footer is the video's 520px width, every item drops to its icon, as in the normal compact footer. Its hover caption then opens downward, away from YouTube's controls.
 - **Play or Pause:** the one filled control, a 56px disc in the text color with the icon in the page's `Canvas` color, so it inverts with the theme. It isn't elevated, and it doesn't use Playback Violet.
 - **Speed:** the rate ("1x", "0.75x", "0.5x", or YouTube's own rate) in semibold tabular figures over "Speed". Its accessible name is "Speed: 0.75x".
 - **Popovers:** the Playback Mode menu and the settings panel still open upward, over the video while open, and scroll inside a height that stops short of the window's top. The readiness status stays off the video and the sentence: under the controls when split, and centered at the window's foot when stacked.
