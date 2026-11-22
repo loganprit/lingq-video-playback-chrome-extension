@@ -47,12 +47,13 @@
     // Presses aimed at the sentence until this time never reach LingQ.
     revealGuard: 0,
     // Whether LingQ never saw the current pointer press, whether that press
-    // follows a click that played a Neighbor Sentence, and the codes of the
-    // held keys whose presses it never saw.
+    // follows a click that moved the page, and the codes of the held keys whose
+    // presses it never saw.
     pointerKept: false,
     pointerFollows: false,
-    // The click that last played a Neighbor Sentence: { x, y, time }.
-    neighborClick: null,
+    // The click that last moved the page under the pointer, by playing a
+    // Neighbor Sentence or toggling Focus Mode: { x, y, time }.
+    movingClick: null,
     keysKept: new Set(),
     // Until this time, a play the companion started counts as playing.
     playPendingUntil: 0,
@@ -692,7 +693,11 @@
     const focus = footerItem(ICONS.focus, "Focus", "lspc-normal-only");
     focus.setAttribute("aria-label", "Focus Mode");
     focus.dataset.tip = "Focus Mode";
-    focus.addEventListener("click", (event) => enterFocus(event.detail === 0));
+    focus.addEventListener("click", (event) => {
+      noteMovingClick(event);
+      enterFocus(event.detail === 0);
+    });
+    ignoreHeldEnter(focus);
 
     const transport = element("div", "lspc-transport");
     transport.append(previous, replay, play, next);
@@ -1120,7 +1125,7 @@
     if (event.type === "click") {
       // The rest of a double click, and a held Enter's repeats and release,
       // land after the list changes, so they stay away from LingQ too.
-      state.neighborClick = { x: event.clientX, y: event.clientY, time: Date.now() };
+      noteMovingClick(event);
     } else {
       state.keysKept.add(event.code);
     }
@@ -1143,9 +1148,26 @@
     exit.type = "button";
     exit.setAttribute("aria-keyshortcuts", "Escape");
     exit.append(icon(ICONS.exitFocus), element("span", "", "Exit Focus"), element("kbd", "", "Esc"));
-    exit.addEventListener("click", (event) => leaveFocus(event.detail === 0));
+    exit.addEventListener("click", (event) => {
+      noteMovingClick(event);
+      leaveFocus(event.detail === 0);
+    });
+    ignoreHeldEnter(exit);
     bar.append(element("span", "lspc-focus-where"), exit);
     return bar;
+  }
+
+  // A click that moves what lies under the pointer. The rest of its double
+  // click stays away from LingQ (see handleRevealPress).
+  function noteMovingClick(event) {
+    if (event.detail > 0) state.movingClick = { x: event.clientX, y: event.clientY, time: Date.now() };
+  }
+
+  // A held Enter's repeats would toggle Focus Mode at the key-repeat rate.
+  function ignoreHeldEnter(button) {
+    button.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && event.repeat) event.preventDefault();
+    });
   }
 
   function enterFocus(keyboard) {
@@ -1327,9 +1349,9 @@
     const hidden = Boolean(context) && !sentenceShown(context);
     const following =
       start &&
-      core.followsNeighborClick(
+      core.followsMovingClick(
         { x: event.clientX, y: event.clientY, time: Date.now() },
-        state.neighborClick,
+        state.movingClick,
       );
     const kept = core.pressKept(start, {
       atWords: Boolean(context) && onSentence(context.sentence, event),

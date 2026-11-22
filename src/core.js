@@ -316,19 +316,20 @@
     return play ? "play" : "keep";
   }
 
-  // Whether a press starts where a click that played a Neighbor Sentence just
-  // was: the rest of a double click. That click moved LingQ to the sentence,
-  // whose words may now lie under the pointer. A press's pointerdown carries
-  // no click count, so time and place decide.
-  const NEIGHBOR_FOLLOW_MS = 1000;
-  const NEIGHBOR_FOLLOW_PX = 8;
+  // Whether a press starts where a click that moved the page just was: the
+  // rest of a double click. A click that plays a Neighbor Sentence moves LingQ
+  // to that sentence, and one on Focus or Exit Focus changes the layout, so
+  // LingQ's words or word panel may now lie under the pointer. A press's
+  // pointerdown carries no click count, so time and place decide.
+  const FOLLOW_MS = 1000;
+  const FOLLOW_PX = 8;
 
-  function followsNeighborClick(press, click) {
+  function followsMovingClick(press, click) {
     return (
       Boolean(click) &&
       press.time >= click.time &&
-      press.time - click.time <= NEIGHBOR_FOLLOW_MS &&
-      Math.hypot(press.x - click.x, press.y - click.y) <= NEIGHBOR_FOLLOW_PX
+      press.time - click.time <= FOLLOW_MS &&
+      Math.hypot(press.x - click.x, press.y - click.y) <= FOLLOW_PX
     );
   }
 
@@ -343,10 +344,11 @@
 
   // Whether a press stays away from LingQ: one aimed at the sentence's words
   // (a pointer press on the sentence, or a word key) while the text is hidden or
-  // guarded just after it showed, or one that follows a click on a Neighbor
-  // Sentence, wherever it lands. A press's start (pointerdown, or a key's
-  // first keydown) decides for all of it, so its release, click, a double
-  // click's dblclick, and a held key's repeats stay away too once the text shows.
+  // guarded just after it showed, or one that follows a click that moved the
+  // page (followsMovingClick), wherever it lands. A press's start (pointerdown,
+  // or a key's first keydown) decides for all of it, so its release, click, a
+  // double click's dblclick, and a held key's repeats stay away too once the
+  // text shows.
   function pressKept(start, { atWords, hidden, guarded, kept, following = false }) {
     const now = following || (atWords && (hidden || guarded));
     return start ? now : kept || now;
@@ -777,7 +779,7 @@
     explicitPlayback,
     focusEscape,
     focusLayout,
-    followsNeighborClick,
+    followsMovingClick,
     initialCue,
     keyAction,
     layoutAction,

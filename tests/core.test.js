@@ -1152,12 +1152,12 @@ test("plays a neighbor on a single click or a fresh Enter and keeps every press 
 
 test("takes a press at a played neighbor's spot, soon after, as the rest of its double click", () => {
   const click = { x: 400, y: 300, time: 10000 };
-  assert.equal(core.followsNeighborClick({ x: 400, y: 300, time: 10140 }, click), true);
-  assert.equal(core.followsNeighborClick({ x: 405, y: 304, time: 11000 }, click), true);
-  assert.equal(core.followsNeighborClick({ x: 400, y: 300, time: 11001 }, click), false);
-  assert.equal(core.followsNeighborClick({ x: 409, y: 300, time: 10140 }, click), false);
-  assert.equal(core.followsNeighborClick({ x: 400, y: 300, time: 9990 }, click), false);
-  assert.equal(core.followsNeighborClick({ x: 400, y: 300, time: 10140 }, null), false);
+  assert.equal(core.followsMovingClick({ x: 400, y: 300, time: 10140 }, click), true);
+  assert.equal(core.followsMovingClick({ x: 405, y: 304, time: 11000 }, click), true);
+  assert.equal(core.followsMovingClick({ x: 400, y: 300, time: 11001 }, click), false);
+  assert.equal(core.followsMovingClick({ x: 409, y: 300, time: 10140 }, click), false);
+  assert.equal(core.followsMovingClick({ x: 400, y: 300, time: 9990 }, click), false);
+  assert.equal(core.followsMovingClick({ x: 400, y: 300, time: 10140 }, null), false);
 });
 
 test("keeps the whole press that follows a played neighbor's click, wherever it lands", () => {
@@ -1171,7 +1171,7 @@ test("keeps the whole press that follows a played neighbor's click, wherever it 
 
 test("pins the neighbor click's 8px radius as a true distance", () => {
   const click = { x: 400, y: 300, time: 10000 };
-  const at = (x, y) => core.followsNeighborClick({ x, y, time: 10100 }, click);
+  const at = (x, y) => core.followsMovingClick({ x, y, time: 10100 }, click);
   assert.equal(at(408, 300), true);
   assert.equal(at(392, 300), true);
   assert.equal(at(400, 308), true);
@@ -1381,4 +1381,16 @@ test("ignores keys other than an Escape keydown", () => {
   assert.equal(core.focusEscape(escape({ type: "keyup" }), inFocus), null);
   assert.equal(core.focusEscape(escape({ key: "Enter" }), inFocus), null);
   assert.equal(core.focusEscape(escape({ key: "Esc" }), inFocus), null);
+});
+
+test("takes a press at a Focus toggle's spot, soon after, as the rest of its double click", () => {
+  // Entering Focus Mode can put LingQ's word panel, and its status buttons,
+  // under the Focus button; leaving puts LingQ's header under Exit Focus.
+  const toggle = { x: 1135, y: 862, time: 20000 };
+  assert.equal(core.followsMovingClick({ x: 1135, y: 862, time: 20180 }, toggle), true);
+  assert.equal(
+    core.pressKept(true, { atWords: false, hidden: false, guarded: false, kept: false, following: true }),
+    true,
+  );
+  assert.equal(core.followsMovingClick({ x: 1135, y: 862, time: 21500 }, toggle), false);
 });
