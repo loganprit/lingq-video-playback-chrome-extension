@@ -805,7 +805,6 @@
     neighborSentences,
     neighborVideoHeight,
     nextPlaybackRate,
-    PLAYBACK_RATES,
     parseBridgeCommand,
     parseBridgeEvent,
     playbackMode,
