@@ -888,7 +888,7 @@
   visibility: hidden;
 }
 
-#lesson-reader.lspc-focus:not(.lspc-focus-panel) > .widget-area {
+#lesson-reader.lspc-focus:not(.lspc-focus-panel) > :is(.widget-area, .reader-widget.is-floating) {
   display: none !important;
 }
 

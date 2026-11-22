@@ -582,7 +582,10 @@
     // LingQ never sees Escape or Space here. Escape would close its video, and
     // Space would play its lesson audio.
     const handleButtonKey = (event) => {
-      const action = core.menuButtonKey(event);
+      const action = core.menuButtonKey(event, {
+        open: button.getAttribute("aria-expanded") === "true",
+        focus: Boolean(state.focus),
+      });
       if (!action) return;
       event.preventDefault();
       event.stopPropagation();
@@ -1268,6 +1271,7 @@
       focus: Boolean(state.focus?.reader),
       panelOpen: focusPanelOpen(context),
       editable: targetKind(event.target).editable,
+      covered: focusCovered(),
       kept: state.escapeKept,
     });
     if (!action) return;
@@ -1280,9 +1284,19 @@
     }
   }
 
+  // Whether something above Focus Mode, such as one of LingQ's dialogs, covers
+  // the middle of the window. Escape is LingQ's dialog's, and LingQ's own
+  // Escape would also close the video, so Focus Mode keeps it and stays.
+  function focusCovered() {
+    const reader = state.focus?.reader;
+    const top = reader && document.elementFromPoint(innerWidth / 2, innerHeight / 2);
+    return Boolean(top) && !reader.contains(top);
+  }
+
   // LingQ closes its floating card on Escape, so the companion uses the card's
   // own close button. LingQ's docked panel has none and keeps the word
-  // selected, so Focus Mode puts the panel away until the selection changes.
+  // selected, so Focus Mode puts the panel away until the selection changes,
+  // and does the same for a card without its close button.
   function closeWordPanel(context) {
     const close = state.focus.reader.querySelector(
       ":scope > .reader-widget.is-floating .widget-close-trigger",

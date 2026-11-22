@@ -1394,3 +1394,33 @@ test("takes a press at a Focus toggle's spot, soon after, as the rest of its dou
   );
   assert.equal(core.followsMovingClick({ x: 1135, y: 862, time: 21500 }, toggle), false);
 });
+
+test("lets Escape on a closed menu button in Focus Mode go on to Focus Mode's Escape", () => {
+  const escape = { type: "keydown", key: "Escape" };
+  assert.equal(core.menuButtonKey(escape, { open: false, focus: true }), null);
+  assert.equal(core.focusEscape(escape, { focus: true, panelOpen: false, editable: false, kept: false }), "exit");
+  // An open popover still closes first, and outside Focus Mode LingQ never sees it.
+  assert.equal(core.menuButtonKey(escape, { open: true, focus: true }), "consume");
+  assert.equal(core.menuButtonKey(escape, { open: false, focus: false }), "consume");
+  assert.equal(core.menuButtonKey({ type: "keydown", key: " " }, { open: false, focus: true }), "consume");
+});
+
+test("keeps Escape from LingQ without leaving while LingQ covers Focus Mode", () => {
+  assert.equal(
+    core.focusEscape(escape(), { ...inFocus, covered: true }),
+    "consume",
+  );
+  assert.equal(
+    core.focusEscape(escape(), { ...inFocus, covered: true, panelOpen: true }),
+    "consume",
+  );
+});
+
+test("puts away a floating card Escape couldn't close, until the selection changes", () => {
+  const card = (marks, dismissed) =>
+    core.wordPanelOpen({ docked: false, floating: true, pressed: false, marks, dismissed });
+  assert.equal(card("w127", "w127"), false);
+  assert.equal(card("", ""), false);
+  assert.equal(card("w119", "w127"), true);
+  assert.equal(card("", null), true);
+});

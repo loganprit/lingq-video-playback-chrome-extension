@@ -520,8 +520,12 @@
     }
   }
 
-  function menuButtonKey(event) {
+  // A key on a Playback Mode or Settings button. Escape closes an open
+  // popover. On a closed one outside Focus Mode it's kept from LingQ, which
+  // would close the video; in Focus Mode it goes on to Focus Mode's Escape.
+  function menuButtonKey(event, { open = false, focus = false } = {}) {
     if (event.altKey || event.ctrlKey || event.metaKey) return null;
+    if (event.key === "Escape" && !open && focus) return null;
     if (event.key === "Escape" || event.key === " " || (event.key === "Enter" && event.repeat)) {
       return "consume";
     }
@@ -579,14 +583,14 @@
   }
 
   // Whether Focus Mode shows LingQ's word panel in place of the Neighbor
-  // Sentences. LingQ's floating card shows whenever LingQ opens it. Its docked
-  // panel keeps the last word it showed even with nothing selected, and a
-  // click on that word shows it again without selecting it. So the docked panel
-  // shows after a press on a word of the active sentence (pressed), or for a
-  // selection there (marks: what is selected) that Escape didn't put away
-  // (dismissed: the marks then).
+  // Sentences. LingQ's floating card shows whenever LingQ opens it, unless
+  // Escape put away a card it couldn't close (dismissed: the marks then). Its
+  // docked panel keeps the last word it showed even with nothing selected, and
+  // a click on that word shows it again without selecting it. So the docked
+  // panel shows after a press on a word of the active sentence (pressed), or
+  // for a selection there (marks: what is selected) that Escape didn't put away.
   function wordPanelOpen({ docked, floating, pressed, marks, dismissed }) {
-    if (!docked) return floating;
+    if (!docked) return floating && marks !== dismissed;
     return pressed || (Boolean(marks) && marks !== dismissed);
   }
 
@@ -594,13 +598,23 @@
   // reaches its document, so in Focus Mode none does. Escape puts away an open
   // word panel first ("close-panel"), then leaves Focus Mode ("exit"). A key
   // held from that exit, a repeat, a modified Escape, and one typed in a field
-  // are only kept from LingQ ("consume"). kept: this Escape's press left Focus
-  // Mode. Only keydown matters, because LingQ acts on keydown.
-  function focusEscape(event, { focus, panelOpen, editable, kept }) {
+  // are only kept from LingQ ("consume"), and so is one pressed while
+  // something of LingQ's, such as a dialog, covers Focus Mode (covered). kept:
+  // this Escape's press left Focus Mode. Only keydown matters, because LingQ
+  // acts on keydown.
+  function focusEscape(event, { focus, panelOpen, editable, covered = false, kept }) {
     if (event.type !== "keydown" || event.key !== "Escape") return null;
     if (kept) return "consume";
     if (!focus) return null;
-    if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || editable) {
+    if (
+      event.repeat ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      editable ||
+      covered
+    ) {
       return "consume";
     }
     return panelOpen ? "close-panel" : "exit";
