@@ -690,13 +690,15 @@
   justify-self: start;
 }
 
-/* The controls: LingQ's footer with only the companion's row in it. */
+/* The controls: LingQ's footer with only the companion's row in it. Its
+   min-height stays auto, so in a short window the controls' row keeps its
+   height and the reader scrolls instead of the row collapsing under them. */
 #lesson-reader.lspc-focus > .main-footer {
   grid-area: controls;
   align-self: start;
   position: static !important;
   height: auto !important;
-  min-height: 0 !important;
+  min-height: auto !important;
   margin: 1rem 0 0 !important;
   padding: 0 !important;
   border: 0 !important;
