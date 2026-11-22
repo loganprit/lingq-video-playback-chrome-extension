@@ -82,10 +82,99 @@
     return index < 0 ? sentences.length : index + 1;
   }
 
-  function seekTarget(sentences, currentSentence, time, settled, synchronizing) {
+  // The sentence a settled seek selects. A Timing Offset's shift moves every
+  // sentence alike, so the time maps through LingQ's bounds moved by the shift.
+  // Pad is left out, so padded neighbors never overlap here. The active
+  // sentence keeps any time inside its own played segment (segment), so its
+  // padded start or end never moves LingQ to a neighbor.
+  function seekTarget(sentences, currentSentence, time, settled, synchronizing, timing = {}) {
     if (!settled || synchronizing || !Number.isSafeInteger(currentSentence)) return null;
-    const target = sentenceAtTime(sentences, time);
+    const { shift = 0, segment = null } = timing;
+    if (segment && time >= segment.start && time < segment.end) return null;
+    const target = sentenceAtTime(sentences, time - shift);
     return target && target !== currentSentence ? target : null;
+  }
+
+  // Timing Offset: a lesson's { shift, pad } in seconds. The shift moves every
+  // sentence earlier (negative) or later in 0.1 s steps, up to 5 s either way.
+  // The pad widens each segment at both ends in 0.05 s steps, up to 0.5 s.
+  const TIMING_SHIFT_LIMIT = 5;
+  const TIMING_PAD_LIMIT = 0.5;
+  // The shortest segment left when a shift pushes a sentence past either end
+  // of the video.
+  const TIMING_MIN_SEGMENT = 0.1;
+
+  function stepped(value, limitLow, limitHigh, steps) {
+    if (!Number.isFinite(value)) return 0;
+    const rounded = Math.round(Math.min(limitHigh, Math.max(limitLow, value)) * steps) / steps;
+    return rounded || 0;
+  }
+
+  function timingOffset(value) {
+    return {
+      shift: stepped(value?.shift, -TIMING_SHIFT_LIMIT, TIMING_SHIFT_LIMIT, 10),
+      pad: stepped(value?.pad, 0, TIMING_PAD_LIMIT, 20),
+    };
+  }
+
+  // A sentence's bounds as the companion plays them: LingQ's bounds moved by
+  // the shift and widened by the pad, within 0 and the video's duration (when
+  // known), rounded to the millisecond. A sentence pushed past an end keeps
+  // TIMING_MIN_SEGMENT there, so its start stays before its end.
+  function offsetSegment(bounds, offset, duration) {
+    const { shift, pad } = timingOffset(offset);
+    const limit = Number.isFinite(duration) && duration > 0 ? duration : Infinity;
+    const within = (time) => Math.min(limit, Math.max(0, time));
+    let start = within(bounds.start + shift - pad);
+    let end = within(bounds.end + shift + pad);
+    if (end <= start) {
+      end = Math.min(limit, start + TIMING_MIN_SEGMENT);
+      start = Math.max(0, end - TIMING_MIN_SEGMENT);
+    }
+    return { start: Math.round(start * 1000) / 1000, end: Math.round(end * 1000) / 1000 };
+  }
+
+  // How the settings panel shows an offset: "+0.5 s", "−0.3 s", or "0.0 s"
+  // for the shift, and "0.15 s" for the pad.
+  function timingText(offset) {
+    const { shift, pad } = timingOffset(offset);
+    const sign = shift > 0 ? "+" : shift < 0 ? "−" : "";
+    return { shift: `${sign}${Math.abs(shift).toFixed(1)} s`, pad: `${pad.toFixed(2)} s` };
+  }
+
+  // The segment Continue plays next. A padded end can run into the next
+  // sentence's padded start, so when the video already stands inside the
+  // next segment, it plays on from there instead of hearing the overlap twice.
+  function continuedSegment(segment, time) {
+    return Number.isFinite(time) && time > segment.start && time < segment.end
+      ? { start: time, end: segment.end }
+      : segment;
+  }
+
+  // Stored Timing Offsets: one record of lesson key to offset, kept apart from
+  // the settings record. A lesson back at no shift and no pad leaves it, and
+  // only the most recently changed TIMING_LESSON_LIMIT lessons stay.
+  const TIMING_KEY = "timingOffsets";
+  const TIMING_LESSON_LIMIT = 200;
+
+  function timingRecord(value) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  }
+
+  function storedTiming(record, lessonKey) {
+    return timingOffset(timingRecord(record)[lessonKey]);
+  }
+
+  function savedTiming(record, lessonKey, offset) {
+    const next = { ...timingRecord(record) };
+    delete next[lessonKey];
+    const value = timingOffset(offset);
+    if (value.shift || value.pad) next[lessonKey] = value;
+    const keys = Object.keys(next);
+    for (const key of keys.slice(0, Math.max(0, keys.length - TIMING_LESSON_LIMIT))) {
+      delete next[key];
+    }
+    return next;
   }
 
   function youtubeEmbedId(value, baseUrl, origin) {
@@ -654,16 +743,19 @@
     );
   }
 
-  // A command to the player. The seek commands take a segment, and rate takes
-  // a playback rate.
+  // A command to the player. The seek commands and retime take a segment, and
+  // rate takes a playback rate. retime gives the playing segment new bounds
+  // without moving the video, for a Timing Offset changed mid-sentence.
+  const SEGMENT_COMMANDS = ["seek", "seek-play", "retime"];
+
   function bridgeCommand(type, generation, argument) {
     if (
       !validGeneration(generation) ||
-      !["bind", "seek", "seek-play", "play", "pause", "rate"].includes(type)
+      !["bind", "seek", "seek-play", "retime", "play", "pause", "rate"].includes(type)
     ) {
       return null;
     }
-    const usesSegment = ["seek", "seek-play"].includes(type);
+    const usesSegment = SEGMENT_COMMANDS.includes(type);
     if (usesSegment !== Boolean(validSegment(argument))) return null;
     if ((type === "rate") !== commandRate(argument)) return null;
 
@@ -706,7 +798,17 @@
     ];
     if (
       !validGeneration(generation) ||
-      !["ready", "state", "blocked", "error", "rate"].includes(type)
+      !["ready", "state", "blocked", "error", "rate", "duration"].includes(type)
+    ) {
+      return null;
+    }
+    if (
+      type === "duration" &&
+      (!detail ||
+        typeof detail !== "object" ||
+        Object.keys(detail).length !== 1 ||
+        !Number.isFinite(detail.duration) ||
+        detail.duration <= 0)
     ) {
       return null;
     }
@@ -752,7 +854,9 @@
           ? { detail: { state: detail.state, currentTime: detail.currentTime } }
           : type === "rate"
             ? { detail: { rate: detail.rate } }
-            : {}),
+            : type === "duration"
+              ? { detail: { duration: detail.duration } }
+              : {}),
     };
   }
 
@@ -778,6 +882,7 @@
     bridgeEvent,
     LEGACY_MODE_KEY,
     SETTINGS_KEY,
+    TIMING_KEY,
     boundaryAction,
     boundaryDelay,
     boundaryDelayWait,
@@ -787,6 +892,7 @@
     claimShortcut,
     companionSettings,
     companionStatus,
+    continuedSegment,
     cueCommand,
     delayEnd,
     duckedVolume,
@@ -805,6 +911,7 @@
     neighborSentences,
     neighborVideoHeight,
     nextPlaybackRate,
+    offsetSegment,
     parseBridgeCommand,
     parseBridgeEvent,
     playbackMode,
@@ -812,6 +919,7 @@
     pressKept,
     readerLesson,
     readingSeconds,
+    savedTiming,
     segmentTransition,
     seekTarget,
     sentenceAtTime,
@@ -821,6 +929,9 @@
     shortcutAction,
     showsNeighbors,
     storedSettings,
+    storedTiming,
+    timingOffset,
+    timingText,
     videoPaused,
     waitRelease,
     wordAudio,
