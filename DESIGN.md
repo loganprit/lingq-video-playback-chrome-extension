@@ -177,7 +177,7 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 - **Rows:** split, the transport (Previous, Replay, Play or Pause, Next) sits centered over the options (Speed, the divider, Playback Mode, Settings). Stacked, they share one centered row. Transport items are icon-only 48px targets with hover captions, which open downward, away from YouTube's controls. The options keep their labels at `0.875rem` at every width.
 - **Play or Pause:** the one filled control, a 56px disc in the text color with the icon in the page's `Canvas` color, so it inverts with the theme. It isn't elevated, and it doesn't use Playback Violet.
 - **Speed:** the rate ("1x", "0.75x", "0.5x", or YouTube's own rate) in semibold tabular figures over "Speed". Its accessible name is "Speed: 0.75x".
-- **Popovers:** the Playback Mode menu and the settings panel still open upward, over the video while open, and scroll inside a height that stops short of the window's top. The readiness status sits under the controls.
+- **Popovers:** the Playback Mode menu and the settings panel still open upward, over the video while open, and scroll inside a height that stops short of the window's top. The readiness status stays off the video and the sentence: under the controls when split, and centered at the window's foot when stacked.
 
 ### Settings Button
 

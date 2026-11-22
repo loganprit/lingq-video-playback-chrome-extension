@@ -785,9 +785,18 @@
   line-height: 22px;
 }
 
-#lesson-reader.lspc-focus .lspc-status {
+/* The status stays off the video and the sentence: under the controls when
+   split, and at the window's foot, over the panel's space, when stacked. */
+#lesson-reader.lspc-focus-split .lspc-status {
   top: calc(100% + 8px);
   bottom: auto;
+}
+
+#lesson-reader.lspc-focus-stack .lspc-status {
+  position: fixed;
+  right: 50%;
+  bottom: 1rem;
+  transform: translateX(50%);
 }
 
 /* A popover opens up over the video while it is open, and stops short of the
