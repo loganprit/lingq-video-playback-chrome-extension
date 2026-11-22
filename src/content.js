@@ -1271,7 +1271,7 @@
       focus: Boolean(state.focus?.reader),
       panelOpen: focusPanelOpen(context),
       editable: targetKind(event.target).editable,
-      covered: focusCovered(),
+      covered: coveredAtPress.get(event) ?? focusCovered(),
       kept: state.escapeKept,
     });
     if (!action) return;
@@ -1286,7 +1286,11 @@
 
   // Whether something above Focus Mode, such as one of LingQ's dialogs, covers
   // the middle of the window. Escape is LingQ's dialog's, and LingQ's own
-  // Escape would also close the video, so Focus Mode keeps it and stays.
+  // Escape would also close the video, so Focus Mode keeps it and stays. A
+  // dialog may close itself on that Escape before it bubbles up, so the check
+  // runs when the key goes down (coveredAtPress).
+  const coveredAtPress = new WeakMap();
+
   function focusCovered() {
     const reader = state.focus?.reader;
     const top = reader && document.elementFromPoint(innerWidth / 2, innerHeight / 2);
@@ -1789,6 +1793,13 @@
   );
   // The root's bubble phase comes after LingQ's React handlers and before its
   // document listeners.
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (state.focus && event.key === "Escape") coveredAtPress.set(event, focusCovered());
+    },
+    true,
+  );
   document.documentElement.addEventListener("keydown", handleFocusEscape);
   document.documentElement.addEventListener("keyup", handleFocusEscape);
   window.addEventListener("pointerdown", handleFocusPress, true);
