@@ -171,7 +171,7 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 ### Focus Bar
 
 - **Style:** a 3.5rem row across the top of Focus Mode. On the left, a `0.875rem` caption at 70% opacity: the sentence's number out of the lesson's count, then the lesson's title, cut off with an ellipsis. On the right, Exit Focus: inward corner brackets, "Exit Focus", and an `Esc` key chip, styled as a flat item with the hover tint.
-- **Behavior:** Exit Focus and `Escape` leave Focus Mode. Leaving from the keyboard returns focus to the Focus button.
+- **Behavior:** Exit Focus and `Escape` leave Focus Mode. When Exit Focus had keyboard focus, leaving returns focus to the Focus button. Otherwise `Escape` leaves focus where it was, so the letter shortcuts keep working on the page.
 
 ### Focus Mode Controls
 

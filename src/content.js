@@ -1274,7 +1274,9 @@
     event.stopPropagation();
     if (action === "exit") {
       state.escapeKept = true;
-      leaveFocus();
+      // Exit Focus goes away, so focus it held returns to the Focus button.
+      // Anywhere else, focus stays, so the letter shortcuts keep working.
+      leaveFocus(Boolean(state.focus.bar?.contains(document.activeElement)));
     } else if (action === "close-panel") {
       closeWordPanel(context);
     }
