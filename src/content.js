@@ -1378,6 +1378,9 @@
       state.pointerKept = kept;
       state.pointerFollows = following;
     }
+    // Each kept press of a click chain re-arms the window, so a triple click
+    // or a run of clicks stays away from LingQ to its last press.
+    if (following) state.movingClick = { ...state.movingClick, time: Date.now() };
     // The press ends with its pointerup. Its mouseup, click, and a double
     // click's dblclick come in the same task, so they still count as the press.
     if (state.pointerKept && event.type === "pointerup" && event.isTrusted) {
