@@ -50,7 +50,7 @@ A Sentence Visibility choice that shows the active sentence only while playback 
 Dimmed, read-only text of the sentences that follow the active sentence. Clicking one plays that sentence. They show only while the active sentence shows, and never under Listen First, because those sentences haven't been heard yet. The active sentence stays LingQ's real interactive sentence.
 
 **Focus Mode**:
-A layout that fills the browser window with the video, the active sentence, and the companion controls, modeled on the LingQ and Migaku iOS players.
+A layout that fills the browser window with the video, the active sentence, and the companion controls, modeled on the LingQ and Migaku iOS players. The active sentence and the word panel stay LingQ's own, so word study works as usual. Escape puts an open word panel away, then leaves it.
 _Avoid_: Fullscreen
 
 **Timing Offset**:

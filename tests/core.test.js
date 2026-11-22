@@ -1150,17 +1150,17 @@ test("plays a neighbor on a single click or a fresh Enter and keeps every press 
   }
 });
 
-test("takes a press at a played neighbor's spot, soon after, as the rest of its double click", () => {
+test("takes a press at a click that moved the page, soon after, as the rest of its double click", () => {
   const click = { x: 400, y: 300, time: 10000 };
-  assert.equal(core.followsNeighborClick({ x: 400, y: 300, time: 10140 }, click), true);
-  assert.equal(core.followsNeighborClick({ x: 405, y: 304, time: 11000 }, click), true);
-  assert.equal(core.followsNeighborClick({ x: 400, y: 300, time: 11001 }, click), false);
-  assert.equal(core.followsNeighborClick({ x: 409, y: 300, time: 10140 }, click), false);
-  assert.equal(core.followsNeighborClick({ x: 400, y: 300, time: 9990 }, click), false);
-  assert.equal(core.followsNeighborClick({ x: 400, y: 300, time: 10140 }, null), false);
+  assert.equal(core.followsMovingClick({ x: 400, y: 300, time: 10140 }, click), true);
+  assert.equal(core.followsMovingClick({ x: 405, y: 304, time: 11000 }, click), true);
+  assert.equal(core.followsMovingClick({ x: 400, y: 300, time: 11001 }, click), false);
+  assert.equal(core.followsMovingClick({ x: 409, y: 300, time: 10140 }, click), false);
+  assert.equal(core.followsMovingClick({ x: 400, y: 300, time: 9990 }, click), false);
+  assert.equal(core.followsMovingClick({ x: 400, y: 300, time: 10140 }, null), false);
 });
 
-test("keeps the whole press that follows a played neighbor's click, wherever it lands", () => {
+test("keeps the whole press that follows a click that moved the page, wherever it lands", () => {
   const shown = { atWords: true, hidden: false, guarded: false };
   assert.equal(core.pressKept(true, { ...shown, kept: false, following: true }), true);
   assert.equal(core.pressKept(false, { ...shown, kept: true }), true);
@@ -1169,9 +1169,9 @@ test("keeps the whole press that follows a played neighbor's click, wherever it 
   assert.equal(core.pressKept(true, { ...shown, kept: false }), false);
 });
 
-test("pins the neighbor click's 8px radius as a true distance", () => {
+test("pins the moving click's 8px radius as a true distance", () => {
   const click = { x: 400, y: 300, time: 10000 };
-  const at = (x, y) => core.followsNeighborClick({ x, y, time: 10100 }, click);
+  const at = (x, y) => core.followsMovingClick({ x, y, time: 10100 }, click);
   assert.equal(at(408, 300), true);
   assert.equal(at(392, 300), true);
   assert.equal(at(400, 308), true);
@@ -1200,4 +1200,221 @@ test("sizes the video with neighbors so a taller window never has a smaller one"
     if (viewport <= 660) assert.equal(height, Math.max(72, viewport - 320));
     previous = height;
   }
+});
+
+test("cycles the speed button through 1x, 0.75x, and 0.5x", () => {
+  assert.equal(core.nextPlaybackRate(1), 0.75);
+  assert.equal(core.nextPlaybackRate(0.75), 0.5);
+  assert.equal(core.nextPlaybackRate(0.5), 1);
+});
+
+test("returns to 1x from a rate chosen in YouTube's own menu", () => {
+  assert.equal(core.nextPlaybackRate(1.5), 1);
+  assert.equal(core.nextPlaybackRate(0.25), 1);
+  assert.equal(core.nextPlaybackRate(Number.NaN), 1);
+});
+
+test("sends the player only a playback rate YouTube's embed offers", () => {
+  const rate = core.bridgeCommand("rate", 3, 0.75);
+  assert.deepEqual(core.parseBridgeCommand(rate), rate);
+  assert.equal(rate.rate, 0.75);
+  assert.deepEqual(core.parseBridgeCommand(core.bridgeCommand("rate", 3, 2)).rate, 2);
+  assert.deepEqual(core.parseBridgeCommand(core.bridgeCommand("rate", 3, 0.25)).rate, 0.25);
+
+  for (const bad of [0, 0.1, 2.5, -1, Number.NaN, Infinity, "0.75", null, undefined]) {
+    assert.equal(core.bridgeCommand("rate", 3, bad), null, String(bad));
+  }
+  assert.equal(core.bridgeCommand("rate", 0, 0.75), null);
+  assert.equal(core.bridgeCommand("play", 3, 0.75), null);
+  assert.equal(core.bridgeCommand("seek", 3, 0.75), null);
+  assert.equal(core.parseBridgeCommand({ ...rate, rate: 5 }), null);
+  assert.equal(core.parseBridgeCommand({ ...rate, segment: { start: 0, end: 1 } }), null);
+  assert.equal(core.parseBridgeCommand({ ...rate, method: "setVolume" }), null);
+});
+
+test("accepts a reported playback rate only as a positive finite number", () => {
+  const event = core.bridgeEvent("rate", 4, { rate: 1.5 });
+  assert.deepEqual(core.parseBridgeEvent(event, 4), event);
+  assert.deepEqual(event.detail, { rate: 1.5 });
+  assert.equal(core.parseBridgeEvent(event, 5), null);
+  for (const bad of [0, -1, Number.NaN, Infinity, "1"]) {
+    assert.equal(core.bridgeEvent("rate", 4, { rate: bad }), null, String(bad));
+  }
+  assert.equal(core.bridgeEvent("rate", 4), null);
+  assert.deepEqual(core.bridgeEvent("rate", 4, { rate: 16 }).detail, { rate: 16 });
+  assert.equal(core.bridgeEvent("rate", 4, { rate: 16.01 }), null);
+  assert.equal(core.bridgeEvent("rate", 4, { rate: 1, extra: 1 }), null);
+});
+
+test("splits Focus Mode from 1024px wide, where LingQ docks its word panel", () => {
+  assert.equal(core.focusLayout(1024, 900, 16).kind, "split");
+  assert.equal(core.focusLayout(1600, 900, 16).kind, "split");
+  assert.equal(core.focusLayout(1023, 900, 16).kind, "stack");
+  assert.equal(core.focusLayout(800, 900, 16).kind, "stack");
+});
+
+test("sizes Focus Mode's video at 16:9 within its column and the window's height", () => {
+  // 1600 - 4rem margins - 3.5rem gap - 36% for the sentence column.
+  assert.deepEqual(core.focusLayout(1600, 900, 16), {
+    kind: "split",
+    videoWidth: 904,
+    videoHeight: 509,
+  });
+  // A short wide window: 600 - 15.5rem for the bar, controls, and margins.
+  assert.deepEqual(core.focusLayout(1600, 600, 16), {
+    kind: "split",
+    videoWidth: 626,
+    videoHeight: 352,
+  });
+  // Split screen: 900 - 36rem for the bar, controls, sentence, and panel.
+  assert.deepEqual(core.focusLayout(800, 900, 16), {
+    kind: "stack",
+    videoWidth: 576,
+    videoHeight: 324,
+  });
+  // The sentence's column keeps 24rem at 1024px, where 36% is less, and
+  // stops at 40rem at 2000px, where 36% is more. The video takes the rest.
+  assert.equal(core.focusLayout(1024, 1200, 16).videoWidth, 1024 - 64 - 56 - 384);
+  assert.equal(core.focusLayout(2000, 1600, 16).videoWidth, 2000 - 64 - 56 - 640);
+  // A wide split screen keeps the stack's column under 48rem.
+  assert.equal(core.focusLayout(1000, 2000, 16).videoWidth, 768);
+});
+
+test("keeps Focus Mode's video at least 9rem tall in very short windows", () => {
+  assert.equal(core.focusLayout(1600, 300, 16).videoHeight, 144);
+  assert.equal(core.focusLayout(800, 400, 16).videoHeight, 144);
+  assert.equal(core.focusLayout(800, 400, 20).videoHeight, 180);
+});
+
+test("never gives a taller or wider window a smaller Focus Mode video", () => {
+  for (const width of [640, 800, 1023, 1024, 1280, 1600, 2560]) {
+    let previous = 0;
+    for (let height = 300; height <= 1600; height += 10) {
+      const { videoHeight } = core.focusLayout(width, height, 16);
+      assert.ok(videoHeight >= previous, `${width}x${height}`);
+      previous = videoHeight;
+    }
+  }
+  for (const height of [500, 900, 1400]) {
+    for (const kind of ["split", "stack"]) {
+      let previous = 0;
+      for (let width = kind === "split" ? 1024 : 600; width <= (kind === "split" ? 3000 : 1023); width += 7) {
+        const { videoHeight } = core.focusLayout(width, height, 16);
+        assert.ok(videoHeight >= previous, `${width}x${height}`);
+        previous = videoHeight;
+      }
+    }
+  }
+});
+
+test("shows LingQ's floating word card in Focus Mode whenever LingQ opens it", () => {
+  assert.equal(core.wordPanelOpen({ docked: false, floating: true, pressed: false, marks: "", dismissed: null }), true);
+  assert.equal(core.wordPanelOpen({ docked: false, floating: false, pressed: true, marks: "w119", dismissed: null }), false);
+});
+
+test("shows LingQ's docked word panel only for a selection in the active sentence", () => {
+  assert.equal(core.wordPanelOpen({ docked: true, floating: false, pressed: false, marks: "w119", dismissed: null }), true);
+  // LingQ keeps the last word's panel with nothing selected.
+  assert.equal(
+    core.wordPanelOpen({ docked: true, floating: false, pressed: false, marks: "", dismissed: null }),
+    false,
+  );
+});
+
+test("shows LingQ's docked word panel after a press on a word, selected or not", () => {
+  // A click on the word LingQ's panel already shows shows it without a mark.
+  assert.equal(
+    core.wordPanelOpen({ docked: true, floating: false, pressed: true, marks: "", dismissed: null }),
+    true,
+  );
+  assert.equal(
+    core.wordPanelOpen({ docked: true, floating: false, pressed: true, marks: "w119", dismissed: "w119" }),
+    true,
+  );
+});
+
+test("keeps a docked word panel away once Escape put it away, until the selection changes", () => {
+  const panel = (marks, dismissed) =>
+    core.wordPanelOpen({ docked: true, floating: false, pressed: false, marks, dismissed });
+  assert.equal(panel("w119", "w119"), false);
+  assert.equal(panel("w127", "w119"), true);
+  assert.equal(panel("w119 w120", "w119"), true);
+});
+
+const escape = (overrides = {}) => ({
+  type: "keydown",
+  key: "Escape",
+  repeat: false,
+  altKey: false,
+  ctrlKey: false,
+  metaKey: false,
+  shiftKey: false,
+  ...overrides,
+});
+const inFocus = { focus: true, panelOpen: false, editable: false, kept: false };
+
+test("puts away an open word panel on the first Escape and leaves Focus Mode on the next", () => {
+  assert.equal(core.focusEscape(escape(), { ...inFocus, panelOpen: true }), "close-panel");
+  assert.equal(core.focusEscape(escape(), inFocus), "exit");
+});
+
+test("leaves Escape to LingQ outside Focus Mode", () => {
+  assert.equal(core.focusEscape(escape(), { ...inFocus, focus: false }), null);
+  assert.equal(core.focusEscape(escape(), { ...inFocus, focus: false, panelOpen: true }), null);
+});
+
+test("keeps every other Escape in Focus Mode from LingQ without acting on it", () => {
+  for (const overrides of [
+    { repeat: true },
+    { altKey: true },
+    { ctrlKey: true },
+    { metaKey: true },
+    { shiftKey: true },
+  ]) {
+    assert.equal(core.focusEscape(escape(overrides), inFocus), "consume", JSON.stringify(overrides));
+  }
+  assert.equal(core.focusEscape(escape(), { ...inFocus, editable: true }), "consume");
+  assert.equal(core.focusEscape(escape(), { ...inFocus, editable: true, panelOpen: true }), "consume");
+});
+
+test("keeps a held Escape that left Focus Mode from closing LingQ's video", () => {
+  const after = { ...inFocus, focus: false, kept: true };
+  assert.equal(core.focusEscape(escape({ repeat: true }), after), "consume");
+  assert.equal(core.focusEscape(escape(), after), "consume");
+});
+
+test("ignores keys other than an Escape keydown", () => {
+  assert.equal(core.focusEscape(escape({ type: "keyup" }), inFocus), null);
+  assert.equal(core.focusEscape(escape({ key: "Enter" }), inFocus), null);
+  assert.equal(core.focusEscape(escape({ key: "Esc" }), inFocus), null);
+});
+
+test("lets Escape on a closed menu button in Focus Mode go on to Focus Mode's Escape", () => {
+  const escape = { type: "keydown", key: "Escape" };
+  assert.equal(core.menuButtonKey(escape, { open: false, focus: true }), null);
+  assert.equal(core.focusEscape(escape, { focus: true, panelOpen: false, editable: false, kept: false }), "exit");
+  // An open popover still closes first, and outside Focus Mode LingQ never sees it.
+  assert.equal(core.menuButtonKey(escape, { open: true, focus: true }), "consume");
+  assert.equal(core.menuButtonKey(escape, { open: false, focus: false }), "consume");
+  assert.equal(core.menuButtonKey({ type: "keydown", key: " " }, { open: false, focus: true }), "consume");
+});
+
+test("keeps Escape from LingQ without leaving while LingQ covers Focus Mode", () => {
+  assert.equal(
+    core.focusEscape(escape(), { ...inFocus, covered: true }),
+    "consume",
+  );
+  assert.equal(
+    core.focusEscape(escape(), { ...inFocus, covered: true, panelOpen: true }),
+    "consume",
+  );
+});
+
+test("puts away a floating card Escape couldn't close, until the selection changes", () => {
+  const card = (marks, dismissed) =>
+    core.wordPanelOpen({ docked: false, floating: true, pressed: false, marks, dismissed });
+  assert.equal(card("w127", "w127"), false);
+  assert.equal(card("", ""), false);
+  assert.equal(card("w119", "w127"), true);
+  assert.equal(card("", null), true);
 });

@@ -316,19 +316,20 @@
     return play ? "play" : "keep";
   }
 
-  // Whether a press starts where a click that played a Neighbor Sentence just
-  // was: the rest of a double click. That click moved LingQ to the sentence,
-  // whose words may now lie under the pointer. A press's pointerdown carries
-  // no click count, so time and place decide.
-  const NEIGHBOR_FOLLOW_MS = 1000;
-  const NEIGHBOR_FOLLOW_PX = 8;
+  // Whether a press starts where a click that moved the page just was: the
+  // rest of a double click. A click that plays a Neighbor Sentence moves LingQ
+  // to that sentence, and one on Focus or Exit Focus changes the layout, so
+  // LingQ's words or word panel may now lie under the pointer. A press's
+  // pointerdown carries no click count, so time and place decide.
+  const FOLLOW_MS = 1000;
+  const FOLLOW_PX = 8;
 
-  function followsNeighborClick(press, click) {
+  function followsMovingClick(press, click) {
     return (
       Boolean(click) &&
       press.time >= click.time &&
-      press.time - click.time <= NEIGHBOR_FOLLOW_MS &&
-      Math.hypot(press.x - click.x, press.y - click.y) <= NEIGHBOR_FOLLOW_PX
+      press.time - click.time <= FOLLOW_MS &&
+      Math.hypot(press.x - click.x, press.y - click.y) <= FOLLOW_PX
     );
   }
 
@@ -343,10 +344,11 @@
 
   // Whether a press stays away from LingQ: one aimed at the sentence's words
   // (a pointer press on the sentence, or a word key) while the text is hidden or
-  // guarded just after it showed, or one that follows a click on a Neighbor
-  // Sentence, wherever it lands. A press's start (pointerdown, or a key's
-  // first keydown) decides for all of it, so its release, click, a double
-  // click's dblclick, and a held key's repeats stay away too once the text shows.
+  // guarded just after it showed, or one that follows a click that moved the
+  // page (followsMovingClick), wherever it lands. A press's start (pointerdown,
+  // or a key's first keydown) decides for all of it, so its release, click, a
+  // double click's dblclick, and a held key's repeats stay away too once the
+  // text shows.
   function pressKept(start, { atWords, hidden, guarded, kept, following = false }) {
     const now = following || (atWords && (hidden || guarded));
     return start ? now : kept || now;
@@ -518,14 +520,104 @@
     }
   }
 
-  function menuButtonKey(event) {
+  // A key on a Playback Mode or Settings button. Escape closes an open
+  // popover. On a closed one outside Focus Mode it's kept from LingQ, which
+  // would close the video; in Focus Mode it goes on to Focus Mode's Escape.
+  function menuButtonKey(event, { open = false, focus = false } = {}) {
     if (event.altKey || event.ctrlKey || event.metaKey) return null;
+    if (event.key === "Escape" && !open && focus) return null;
     if (event.key === "Escape" || event.key === " " || (event.key === "Enter" && event.repeat)) {
       return "consume";
     }
     return event.type === "keydown" && ["ArrowDown", "ArrowUp"].includes(event.key)
       ? "open"
       : null;
+  }
+
+  // Speed: the speed button cycles through these rates. The bridge accepts any
+  // rate YouTube's embed offers, so a rate chosen in YouTube's own menu can be
+  // set again after the player reloads.
+  const PLAYBACK_RATES = [1, 0.75, 0.5];
+
+  function nextPlaybackRate(rate) {
+    const index = PLAYBACK_RATES.indexOf(rate);
+    return index < 0 ? 1 : PLAYBACK_RATES[(index + 1) % PLAYBACK_RATES.length];
+  }
+
+  function commandRate(value) {
+    return Number.isFinite(value) && value >= 0.25 && value <= 2;
+  }
+
+  function reportedRate(value) {
+    return Number.isFinite(value) && value > 0 && value <= 16;
+  }
+
+  // Focus Mode's layout for a window of width by height px, with rem the root
+  // font size. From 1024px wide, where LingQ docks its word panel, it splits:
+  // the video and controls on the left, and the sentence with its neighbors or
+  // the word panel on the right, which keeps at least 24rem and grows to 40rem
+  // (36% of the width). Narrower windows stack the video, the controls, the
+  // sentence, and the neighbors or the word panel, with 26rem kept under the
+  // controls for the sentence, its translation, and the panel. The video is as
+  // large as its column allows and never shorter than 9rem; a window too short
+  // for that floor scrolls.
+  const FOCUS_SPLIT_WIDTH = 1024;
+
+  function focusLayout(width, height, rem) {
+    const split = width >= FOCUS_SPLIT_WIDTH;
+    // The video's column: split, what the 2rem margins, the 3.5rem gap, and
+    // the sentence's column leave; stacked, the width inside 1.5rem margins.
+    const column = split
+      ? width - 4 * rem - 3.5 * rem - Math.min(40 * rem, Math.max(24 * rem, width * 0.36))
+      : Math.min(width - 3 * rem, 48 * rem);
+    // Under the bar (5rem): split, a 1.5rem gap, the controls' two rows
+    // (7.5rem), and 1.5rem at the foot; stacked, the controls' row (5rem) and
+    // the 26rem kept for the sentence and what follows it.
+    const room = height - (split ? 5 + 1.5 + 7.5 + 1.5 : 5 + 5 + 26) * rem;
+    const videoHeight = Math.max(9 * rem, Math.min((column * 9) / 16, room));
+    return {
+      kind: split ? "split" : "stack",
+      videoWidth: Math.round((videoHeight * 16) / 9),
+      videoHeight: Math.round(videoHeight),
+    };
+  }
+
+  // Whether Focus Mode shows LingQ's word panel in place of the Neighbor
+  // Sentences. LingQ's floating card shows whenever LingQ opens it, unless
+  // Escape put away a card it couldn't close (dismissed: the marks then). Its
+  // docked panel keeps the last word it showed even with nothing selected, and
+  // a click on that word shows it again without selecting it. So the docked
+  // panel shows after a press on a word of the active sentence (pressed), or
+  // for a selection there (marks: what is selected) that Escape didn't put away.
+  function wordPanelOpen({ docked, floating, pressed, marks, dismissed }) {
+    if (!docked) return floating && marks !== dismissed;
+    return pressed || (Boolean(marks) && marks !== dismissed);
+  }
+
+  // What Escape does in Focus Mode. LingQ closes the video on any Escape that
+  // reaches its document, so in Focus Mode none does. Escape puts away an open
+  // word panel first ("close-panel"), then leaves Focus Mode ("exit"). A key
+  // held from that exit, a repeat, a modified Escape, and one typed in a field
+  // are only kept from LingQ ("consume"), and so is one pressed while
+  // something of LingQ's, such as a dialog, covers Focus Mode (covered). kept:
+  // this Escape's press left Focus Mode. Only keydown matters, because LingQ
+  // acts on keydown.
+  function focusEscape(event, { focus, panelOpen, editable, covered = false, kept }) {
+    if (event.type !== "keydown" || event.key !== "Escape") return null;
+    if (kept) return "consume";
+    if (!focus) return null;
+    if (
+      event.repeat ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      editable ||
+      covered
+    ) {
+      return "consume";
+    }
+    return panelOpen ? "close-panel" : "exit";
   }
 
   function validGeneration(value) {
@@ -562,15 +654,18 @@
     );
   }
 
-  function bridgeCommand(type, generation, segment) {
+  // A command to the player. The seek commands take a segment, and rate takes
+  // a playback rate.
+  function bridgeCommand(type, generation, argument) {
     if (
       !validGeneration(generation) ||
-      !["bind", "seek", "seek-play", "play", "pause"].includes(type)
+      !["bind", "seek", "seek-play", "play", "pause", "rate"].includes(type)
     ) {
       return null;
     }
     const usesSegment = ["seek", "seek-play"].includes(type);
-    if (usesSegment !== Boolean(validSegment(segment))) return null;
+    if (usesSegment !== Boolean(validSegment(argument))) return null;
+    if ((type === "rate") !== commandRate(argument)) return null;
 
     return {
       source: SOURCE,
@@ -579,15 +674,20 @@
       type,
       generation,
       ...(usesSegment
-        ? { segment: { start: segment.start, end: segment.end } }
+        ? { segment: { start: argument.start, end: argument.end } }
         : {}),
+      ...(type === "rate" ? { rate: argument } : {}),
     };
   }
 
   function parseBridgeCommand(value) {
     if (!value || typeof value !== "object") return null;
 
-    const command = bridgeCommand(value.type, value.generation, value.segment);
+    const command = bridgeCommand(
+      value.type,
+      value.generation,
+      value.type === "rate" ? value.rate : value.segment,
+    );
     return command &&
       value.source === SOURCE &&
       value.version === VERSION &&
@@ -606,7 +706,16 @@
     ];
     if (
       !validGeneration(generation) ||
-      !["ready", "state", "blocked", "error"].includes(type)
+      !["ready", "state", "blocked", "error", "rate"].includes(type)
+    ) {
+      return null;
+    }
+    if (
+      type === "rate" &&
+      (!detail ||
+        typeof detail !== "object" ||
+        Object.keys(detail).length !== 1 ||
+        !reportedRate(detail.rate))
     ) {
       return null;
     }
@@ -641,7 +750,9 @@
         ? { detail: { reason: detail.reason } }
         : type === "state"
           ? { detail: { state: detail.state, currentTime: detail.currentTime } }
-          : {}),
+          : type === "rate"
+            ? { detail: { rate: detail.rate } }
+            : {}),
     };
   }
 
@@ -680,7 +791,9 @@
     delayEnd,
     duckedVolume,
     explicitPlayback,
-    followsNeighborClick,
+    focusEscape,
+    focusLayout,
+    followsMovingClick,
     initialCue,
     keyAction,
     layoutAction,
@@ -691,6 +804,7 @@
     neighborCount,
     neighborSentences,
     neighborVideoHeight,
+    nextPlaybackRate,
     parseBridgeCommand,
     parseBridgeEvent,
     playbackMode,
@@ -710,6 +824,7 @@
     videoPaused,
     waitRelease,
     wordAudio,
+    wordPanelOpen,
     wordKey,
     youtubeEmbedId,
   });

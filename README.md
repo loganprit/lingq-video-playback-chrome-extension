@@ -15,10 +15,11 @@ The extension drives only the visible player, mainly through the YouTube IFrame 
 
 ## Footer controls
 
-The extension adds three items to LingQ's footer, styled like LingQ's own *Page View* and *Review Sentence*:
+The extension adds four items to LingQ's footer, styled like LingQ's own *Page View* and *Review Sentence*:
 
 - **Replay** replays the current sentence once (Replay Now).
 - **Playback Mode** shows what happens at the end of each sentence: *Pause at end*, *Continue at end*, or *Repeat at end*. Click it, or focus it and press `Enter` or an arrow key, to open its menu. In the menu, the arrow keys, `Home`, and `End` move, `Enter` or `Space` chooses, and `Escape` closes. The menu also lists the keyboard shortcuts. The choice is saved across reloads.
+- **Focus** enters Focus Mode (see below).
 - **Settings** opens the companion's settings panel: the Boundary Delay, Sentence Visibility, and Neighbor Sentences. Focus starts on the chosen delay. The arrow keys choose, `Tab` moves from the delay to the seconds list, Sentence Visibility, and Neighbor Sentences, and `Escape` or a click outside closes the panel. Keys pressed in the panel never reach LingQ, so `Escape` there doesn't also close a word card or the video.
 
 The Playback Mode and the settings are saved together in one record. An older install's saved Playback Mode carries over once.
@@ -61,6 +62,21 @@ Neighbor Sentences show the next three sentences under the active one, dimmed, s
 - Under Show on Pause they show only while the sentence does, and keep their place while hidden. Under Listen First they never show, because you haven't heard the sentences after this one yet.
 - In tall windows the video is 4rem shorter to make room for them. It never gets smaller than in a shorter window, though: at 660px tall or less it keeps its short-window size, and up to 788px tall it holds 340px, the short-window size at 660px. In both ranges neighbors only take the height that's left over, so often none show below about 750px. Only the neighbors that fit above LingQ's *Show Translation* row show, so the video, the sentence, and the footer never move.
 
+## Focus Mode
+
+Focus Mode fills the browser window with the video, LingQ's sentence, and the companion's controls, like LingQ's iPad and iPhone players. Click **Focus** in the footer to enter it. Click **Exit Focus** at the top right, or press `Escape`, to leave it. Leaving puts the page back exactly as it was. Focus Mode isn't saved: a reload starts in the normal layout.
+
+- **Wide windows** (1024px and wider) split in two. The video and the controls are on the left. LingQ's sentence, in larger type, and the Neighbor Sentences are on the right. A slim bar at the top shows the sentence's number, the lesson's title, and Exit Focus.
+- **Split-screen windows** (narrower than 1024px) stack the video, the controls, the sentence, and the Neighbor Sentences.
+- **The controls** are Previous, Replay, Play or Pause, and Next, then the speed, the Playback Mode, and Settings. They do what `P`, `R`, `Space`, and `N` do.
+- **Speed** cycles 1x, 0.75x, and 0.5x, and shows the current rate. A rate chosen in YouTube's own menu shows there too, and the next click returns to 1x. The rate lasts for the page, even when the player reloads, but isn't saved.
+- **Word study** works as usual, because the sentence and the word panel are LingQ's own. A word you select opens LingQ's word panel in the Neighbor Sentences' place, under the sentence. Neither the sentence nor the video moves. In wide windows it's LingQ's docked panel, and in split screen it's LingQ's floating card, docked in the same place.
+- **Escape** first puts an open word panel away, then leaves Focus Mode. In split screen it closes LingQ's word card with the card's own close button. In wide windows LingQ's panel has no close button, so Focus Mode shows the Neighbor Sentences again until you select another word. Either way the word stays selected, as it does in LingQ, so a Vocabulary Hold still waits for you to click off the sentence. No `Escape` in Focus Mode reaches LingQ, which would close the video. That includes one typed in a field and a held key's repeats. While one of LingQ's own dialogs covers Focus Mode, `Escape` does nothing. Close the dialog with its own button. After `Escape` closes the Playback Mode menu or the settings panel, the next `Escape` leaves Focus Mode as usual.
+- **Double clicks** on Focus or Exit Focus act once. The second click never reaches what moved under the pointer, such as LingQ's word panel or its header.
+- **Short windows** shrink the video first, so the video, the sentence, and the controls stay in view together. The video never gets shorter than 9rem (144px). In wide windows the video shrinks with the window's height, and below 24.5rem (392px) tall the page scrolls. In split screen the video leaves 26rem (416px) under the controls for the sentence and what follows it. The word panel's space keeps at least 10rem (160px), so a window shorter than the video, the controls, the sentence, and that space scrolls. That's about 600px for a three-line sentence. The video, the controls, and the sentence stay at the top.
+
+Every Playback Mode and setting works the same in Focus Mode. LingQ's header, side arrows, and its own footer items are hidden there, and so is LingQ's list of the sentence's saved words under *Show Translation*.
+
 ## Keyboard shortcuts
 
 | Key | Action |
@@ -72,7 +88,7 @@ Neighbor Sentences show the next three sentences under the active one, dimmed, s
 
 Shortcuts are ignored for modified or repeated key presses and while an editable control owns focus. `N`, `P`, and `R` are also ignored while a button, link, or other interactive control owns focus. Clicking a companion button or menu option with the mouse returns focus to the page, so the letter keys keep working. `Space` still plays or pauses the video from a focused button or link, because LingQ would otherwise play its own lesson audio. Inside the open Playback Mode menu, `N`, `P`, `R`, and `Space` never trigger shortcuts. `Space` chooses the focused option, and the menu keeps its navigation keys from LingQ. On the Playback Mode button itself, `Escape` and `Space` never reach LingQ.
 
-Anywhere else on the page, `Escape` closes the video, as it does in LingQ without the extension. Click LingQ's YouTube button to open the video again.
+Outside Focus Mode, `Escape` anywhere else on the page closes the video, as it does in LingQ without the extension. Click LingQ's YouTube button to open the video again. In Focus Mode, `Escape` puts a word panel away and then leaves Focus Mode instead.
 
 ## Vocabulary study
 

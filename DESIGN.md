@@ -76,6 +76,7 @@ The system is intentionally narrow rather than a standalone brand world. Its vis
 - One menu for the Playback Mode, with the shortcuts at its foot, and one settings panel beside it.
 - A single Playback Violet accent, used only for the selected choice in the menu and the settings panel.
 - Compact icon-only items for narrow footers, and a smaller player floor for short windows.
+- Focus Mode: a second layout that fills the window, built from LingQ's own reader with CSS.
 
 ## Colors
 
@@ -115,6 +116,16 @@ LingQ marks its dark theme with `theme-luminosity-dark` on `body`. It keeps `is-
 
 The 16:9 player is centered and sized from both reader width and available viewport height. The real LingQ sentence remains centered below it. The companion's footer items sit after LingQ's `section--last` and match its two equal rows for icon and label, so icons and label baselines line up with *Review Sentence*. The companion always stays in LingQ's single footer row. LingQ's footer container is the size container: where its content box is under `37rem` (LingQ's 480px footer below a 640px viewport, or a 600px footer beside the word panel at about 1024px), the items drop their labels and keep 44px icon targets. Their accessible names are unchanged. Short windows reduce the player's floor at `41.25rem` viewport height so the complete study loop remains usable. With Neighbor Sentences, `core.neighborVideoHeight` sets the player's height through `--lspc-video-height`: the short layout's height at `41.25rem` or less, and above it the larger of `100dvh - 28rem` (4rem less than without neighbors) and `21.25rem`, the short layout's height at its top. So a taller window never has a smaller player, and up to `49.25rem` (788px) the player holds 340px while neighbors take only the height left. They sit in their own grid row between the sentence and LingQ's translation, which keeps at least 40px. Only the leading neighbors that fit show, so the player, sentence, and footer never move.
 
+### Focus Mode
+
+Focus Mode restyles LingQ's reader to fill the window (`position: fixed`, above LingQ's sticky header) on its own background color, `--readerGlobalBackground`. LingQ's own modals still open above it. The four LingQ containers between the reader and its video and sentence get `display: contents`, so the reader's grid places LingQ's parts directly and nothing moves in the DOM. `core.focusLayout` sizes the video from the window and sets the reader's `--lspc-focus-video-width` and `--lspc-focus-video-height`.
+
+- **Split** (1024px and wider, where LingQ docks its word panel): a 5rem bar row over two columns. The left column is the video's width, 2rem from the window's edge, with the controls 1.5rem under it. The right column, 3.5rem away, takes the rest: at least 24rem, and 36% of the window up to 40rem while the video is width-bound. It holds the sentence at 1.5em with a 1.7 line height, start-aligned, then *Show Translation*, then the Neighbor Sentences or LingQ's word panel filling the rest.
+- **Stack** (narrower): one centered column up to 48rem wide, with 1.5rem margins. The bar, the video, the controls 1rem under it, then the sentence at 1.15em, *Show Translation*, and the Neighbor Sentences or the word panel in at least 10rem.
+- **Video:** 16:9, as large as its column allows. Split, it leaves 10.5rem under the bar for the controls and margins. Stacked, it leaves 31rem for the controls, the sentence, and the panel. Never shorter than 9rem; a window too short for that scrolls.
+- **Word panel:** LingQ's docked panel fills the space below *Show Translation*, with its own middle section scrolling between the word and its status buttons. LingQ's floating card docks in the same place at full width, positioned relative so its close button stays on it. Either one hides the Neighbor Sentences with `visibility`, so they keep their fit.
+- **Hidden in Focus Mode:** LingQ's header (kept at zero height but laid out, since seek sync presses its progress marks, and 8000px wide inside the clip so each mark gets whole pixels), its side arrows, its footer items, and the sentence's saved-word list.
+
 Spacing uses a 4px item gap, a 24px player-to-sentence gap, and an 8px gap between the menu and its button.
 
 ## Elevation & Depth
@@ -151,6 +162,23 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 
 - **Where:** while a Boundary Delay runs, the Playback Mode button's icon becomes a ring that empties as the wait runs out (drawn from the wait's own start and end, so a remounted footer picks up mid-wait), and its label reads "Next in 3 s" or "Repeat in 3 s". Both share the button's stacked grid cells, so the footer never moves. In the compact footer the ring remains and the hover caption carries the text.
 - **Semantics:** the button's accessible name stays "Playback Mode: <label>".
+
+### Focus Button
+
+- **Button:** a footer item with four corner brackets over "Focus", after Settings, with the accessible name "Focus Mode". Focus Mode hides it. Pressing it from the keyboard moves focus to Exit Focus. A held `Enter` toggles once.
+- **Double click:** entering can put LingQ's word panel, with its status buttons, under the pointer, and leaving puts LingQ's header under Exit Focus. So the rest of a double click on either, a press within 1 s and 8px, never reaches LingQ, as with a Neighbor Sentence. Each such press starts the second again, so a triple click or a run of clicks stays away to its last press.
+
+### Focus Bar
+
+- **Style:** a 3.5rem row across the top of Focus Mode. On the left, a `0.875rem` caption at 70% opacity: the sentence's number out of the lesson's count, then the lesson's title, cut off with an ellipsis. On the right, Exit Focus: inward corner brackets, "Exit Focus", and an `Esc` key chip, styled as a flat item with the hover tint.
+- **Behavior:** Exit Focus and `Escape` leave Focus Mode. When Exit Focus had keyboard focus, leaving returns focus to the Focus button. Otherwise `Escape` leaves focus where it was, so the letter shortcuts keep working on the page.
+
+### Focus Mode Controls
+
+- **Rows:** split, the transport (Previous, Replay, Play or Pause, Next) sits centered over the options (Speed, the divider, Playback Mode, Settings). Stacked, they share one centered row. Transport items are icon-only 48px targets. The options keep their labels at `0.875rem` while LingQ's footer is at least 37rem wide. Narrower, as in a split window at 1024×768, where the footer is the video's 520px width, every item drops to its icon, as in the normal compact footer. Its hover caption then opens downward, away from YouTube's controls.
+- **Play or Pause:** the one filled control, a 56px disc in the text color with the icon in the page's `Canvas` color, so it inverts with the theme. It isn't elevated, and it doesn't use Playback Violet.
+- **Speed:** the rate ("1x", "0.75x", "0.5x", or YouTube's own rate) in semibold tabular figures over "Speed". Its accessible name is "Speed: 0.75x".
+- **Popovers:** the Playback Mode menu and the settings panel still open upward, over the video while open, and scroll inside a height that stops short of the window's top. The readiness status stays off the video and the sentence: under the controls when split, and centered at the window's foot when stacked.
 
 ### Settings Button
 
@@ -193,6 +221,6 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 
 ### Don't:
 
-- **Don't** replace, cover, or restyle LingQ-owned sentence, vocabulary, translation, sidebar, reader, or YouTube controls. Sentence Visibility is the one exception: it hides the real sentence in place and adds only its caption.
+- **Don't** replace, cover, or restyle LingQ-owned sentence, vocabulary, translation, sidebar, reader, or YouTube controls. Two exceptions: Sentence Visibility hides the real sentence in place and adds only its caption, and Focus Mode, while it's on, lays out LingQ's own reader and enlarges its sentence. Leaving Focus Mode restores both exactly.
 - **Don't** add cards, decorative shadows, gradients, new fonts, or extra accent colors.
 - **Don't** turn compact status or help into permanent footer clutter.
