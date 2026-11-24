@@ -155,7 +155,7 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 - **Popover:** opens 8px above the button and aligns to its right edge, so it never overflows the viewport's right side. It fades and rises 4px over 120ms, with no motion under `prefers-reduced-motion`.
 - **Heading:** "At the end of each sentence", a caption that labels the menu.
 - **Options:** Pause, Continue, and Repeat as `menuitemradio`s, each with an icon, a bold name, a one-line description, and a check on the current one.
-- **Shortcuts line:** the page shortcuts as key chips under a hairline. It replaces the separate help button.
+- **Shortcuts line:** the page shortcuts as key chips under a hairline: Space, P and N, R, and W for the next new word. It replaces the separate help button.
 - **Keyboard:** the arrow keys move with wrap-around, Home and End jump, Enter or Space chooses, Escape closes, and Tab closes and moves on. Choosing from the keyboard returns focus to the button. Choosing with the mouse returns focus to the page, so the letter shortcuts keep working.
 
 ### Boundary Delay Countdown
@@ -197,7 +197,7 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 ### Hidden Sentence
 
 - **Style:** while Sentence Visibility hides it, LingQ's real sentence stays in place under `visibility: hidden`, so the layout never jumps. Its words can't be hovered, selected, or clicked. A `0.875rem` caption at 55% of the text color, "Click to show the sentence", sits at its center.
-- **Reveal:** a click on the sentence's box shows it, and so does a LingQ word key (`←`, `→`, `b`, `Shift`+`Space`). A press or key that begins on the hidden text stays away from LingQ to its end, and so does every press in the half second after any reveal, so no word is selected or saved. The same keys held with `Alt`, `Ctrl`, or `Cmd` never reach LingQ either, but keep the browser's own action. Something LingQ floats over the sentence still gets its clicks. A sentence that holds a selection always shows.
+- **Reveal:** a click on the sentence's box shows it, and so does a LingQ word key (`←`, `→`, `b`, `Shift`+`Space`) or the companion's `W`, which then opens no word. A press or key that begins on the hidden text stays away from LingQ to its end, and so does every press in the half second after any reveal, so no word is selected or saved. The same keys held with `Alt`, `Ctrl`, or `Cmd` never reach LingQ either, but keep the browser's own action. Something LingQ floats over the sentence still gets its clicks. A sentence that holds a selection always shows.
 
 ### Neighbor Sentences
 

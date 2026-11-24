@@ -53,5 +53,9 @@ Dimmed, read-only text of the sentences that follow the active sentence. Clickin
 A layout that fills the browser window with the video, the active sentence, and the companion controls, modeled on the LingQ and Migaku iOS players. The active sentence and the word panel stay LingQ's own, so word study works as usual. Escape puts an open word panel away, then leaves it.
 _Avoid_: Fullscreen
 
+**New Word**:
+A word LingQ shows in blue: one never saved as a LingQ, marked known, or ignored. `W` opens the next one in the active sentence, as a click on it would, so Auto LingQ creation saves it.
+_Avoid_: Unknown word
+
 **Timing Offset**:
 A per-lesson shift, and a pad that lengthens both ends, applied to LingQ's sentence bounds before the companion plays them. LingQ's stored timestamps stay unchanged.
