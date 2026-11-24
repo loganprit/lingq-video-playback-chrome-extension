@@ -582,7 +582,13 @@
       return null;
     }
 
-    const action = { Space: "toggle", N: "next", P: "previous", R: "replay" }[value.key];
+    const action = {
+      Space: "toggle",
+      N: "next",
+      P: "previous",
+      R: "replay",
+      W: "new-word",
+    }[value.key];
     if (!action) return null;
     if (value.type === "keyup") return "consume";
     if (value.repeat) return value.key === "Space" ? "consume" : null;
@@ -603,6 +609,23 @@
     event.preventDefault();
     event.stopImmediatePropagation();
     return action;
+  }
+
+  // What W does in the active sentence: it opens the first new word (one LingQ
+  // shows blue) after the selection, wrapping to the sentence's start, and
+  // never one already selected. words: the sentence's words in order, each
+  // { new, selected }, where a selected phrase marks each of its words. A
+  // hidden sentence is only revealed, and just after it shows the key does
+  // nothing, so W never lands on a word the reader can't see.
+  function newWordTarget(words, { hidden, guarded }) {
+    if (hidden) return { kind: "reveal" };
+    if (guarded) return null;
+    const after = words.findLastIndex((word) => word.selected) + 1;
+    for (let step = 0; step < words.length; step += 1) {
+      const index = (after + step) % words.length;
+      if (words[index].new && !words[index].selected) return { kind: "open", index };
+    }
+    return null;
   }
 
   function menuKey(event, index, count) {
@@ -929,6 +952,7 @@
     neighborCount,
     neighborSentences,
     neighborVideoHeight,
+    newWordTarget,
     nextPlaybackRate,
     offsetSegment,
     parseBridgeCommand,

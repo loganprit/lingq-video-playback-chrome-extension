@@ -713,17 +713,20 @@ test("resolves shortcuts only for an unmodified page-owned key press", () => {
   assert.equal(core.shortcutAction({ key: "N" }), "next");
   assert.equal(core.shortcutAction({ key: "P" }), "previous");
   assert.equal(core.shortcutAction({ key: "R" }), "replay");
+  assert.equal(core.shortcutAction({ key: "W" }), "new-word");
   assert.equal(core.shortcutAction({ key: "Space", type: "keyup" }), "consume");
   assert.equal(core.shortcutAction({ key: "N", type: "keyup" }), "consume");
   assert.equal(core.shortcutAction({ key: "P", type: "keyup" }), "consume");
   assert.equal(core.shortcutAction({ key: "R", type: "keyup" }), "consume");
+  assert.equal(core.shortcutAction({ key: "W", type: "keyup" }), "consume");
   assert.equal(core.shortcutAction({ key: "Space", repeat: true }), "consume");
   assert.equal(core.shortcutAction({ key: "N", repeat: true }), null);
   assert.equal(core.shortcutAction({ key: "P", repeat: true }), null);
   assert.equal(core.shortcutAction({ key: "R", repeat: true }), null);
+  assert.equal(core.shortcutAction({ key: "W", repeat: true }), null);
 
-  for (const blocked of ["modified", "editable", "interactive"]) {
-    for (const key of ["N", "P", "R"]) {
+  for (const blocked of ["modified", "editable", "interactive", "menu"]) {
+    for (const key of ["N", "P", "R", "W"]) {
       assert.equal(core.shortcutAction({ key, [blocked]: true }), null);
     }
   }
@@ -737,7 +740,7 @@ test("resolves Space from a focused control but leaves letters to the control", 
   assert.equal(core.shortcutAction({ key: "Space", repeat: true, ...control }), "consume");
   assert.equal(core.shortcutAction({ key: "Space", modified: true, ...control }), null);
 
-  for (const key of ["N", "P", "R"]) {
+  for (const key of ["N", "P", "R", "W"]) {
     assert.equal(core.shortcutAction({ key, ...control }), null);
     assert.equal(core.shortcutAction({ key, type: "keyup", ...control }), null);
   }
@@ -930,7 +933,7 @@ test("chooses, closes, or leaves the Playback Mode menu from the keyboard", () =
   assert.equal(core.menuKey({ key: "n" }, 0, 3), null);
 });
 
-test("claims the previous-Sentence key in the same cases as Next", () => {
+test("claims the previous-Sentence and new-word keys in the same cases as Next", () => {
   const claim = (key, { type = "keydown", enabled = true, target = {}, ...init } = {}) => {
     const event = new Event(type, { cancelable: true });
     Object.defineProperties(event, {
@@ -965,11 +968,64 @@ test("claims the previous-Sentence key in the same cases as Next", () => {
   for (const [init, expected] of cases) {
     const previous = claim("p", init);
     const next = claim("n", init);
+    const newWord = claim("w", init);
     assert.deepEqual(previous, { action: expected, claimed: expected !== null });
     assert.deepEqual(next, {
       action: expected === "previous" ? "next" : expected,
       claimed: previous.claimed,
     });
+    assert.deepEqual(newWord, {
+      action: expected === "previous" ? "new-word" : expected,
+      claimed: previous.claimed,
+    });
+  }
+});
+
+// A sentence's words from a pattern: "n" a new word, "k" any other word, and
+// an uppercase letter the same word selected.
+const sentenceWords = (pattern) =>
+  [...pattern].map((letter) => ({
+    new: letter.toLowerCase() === "n",
+    selected: letter === letter.toUpperCase(),
+  }));
+const shown = { hidden: false, guarded: false };
+const opened = (pattern) => core.newWordTarget(sentenceWords(pattern), shown)?.index ?? null;
+
+test("opens the sentence's first new word when nothing is selected", () => {
+  assert.equal(opened("kknkn"), 2);
+  assert.equal(opened("nkk"), 0);
+  assert.deepEqual(core.newWordTarget(sentenceWords("kn"), shown), { kind: "open", index: 1 });
+});
+
+test("opens the next new word after the selected word, wrapping to the first", () => {
+  assert.equal(opened("nKnkn"), 2);
+  assert.equal(opened("nknKn"), 4);
+  assert.equal(opened("nknkN"), 0);
+  assert.equal(opened("knkK"), 1);
+});
+
+test("opens the next new word after a selected phrase, never one inside it", () => {
+  assert.equal(opened("nNNkn"), 4);
+  assert.equal(opened("nkNKN"), 0);
+  assert.equal(opened("knNNk"), 1);
+});
+
+test("does nothing in a sentence whose only new words are selected or that has none", () => {
+  assert.equal(core.newWordTarget(sentenceWords("kkk"), shown), null);
+  assert.equal(core.newWordTarget(sentenceWords("kNk"), shown), null);
+  assert.equal(core.newWordTarget(sentenceWords("kNNk"), shown), null);
+  assert.equal(core.newWordTarget([], shown), null);
+});
+
+test("only reveals a hidden sentence and opens nothing just after it shows", () => {
+  for (const pattern of ["kn", "kk", ""]) {
+    assert.deepEqual(core.newWordTarget(sentenceWords(pattern), { hidden: true, guarded: false }), {
+      kind: "reveal",
+    });
+    assert.deepEqual(core.newWordTarget(sentenceWords(pattern), { hidden: true, guarded: true }), {
+      kind: "reveal",
+    });
+    assert.equal(core.newWordTarget(sentenceWords(pattern), { hidden: false, guarded: true }), null);
   }
 });
 
