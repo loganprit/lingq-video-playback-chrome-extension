@@ -54,4 +54,4 @@ A layout that fills the browser window with the video, the active sentence, and 
 _Avoid_: Fullscreen
 
 **Timing Offset**:
-A per-lesson shift applied to LingQ's sentence bounds before the companion plays them. LingQ's stored timestamps stay unchanged.
+A per-lesson shift, and a pad that lengthens both ends, applied to LingQ's sentence bounds before the companion plays them. LingQ's stored timestamps stay unchanged.

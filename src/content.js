@@ -20,7 +20,12 @@
     // selection whose docked panel Escape put away.
     focus: null,
     cache: null,
+    // The lesson and sentence of the last cue, and its key, which adds the
+    // bounds it played.
+    cueAt: null,
     cueKey: null,
+    // The bound video's duration, once the player knows it.
+    duration: null,
     frame: null,
     generation: 0,
     ignoreResetUntil: 0,
@@ -61,6 +66,11 @@
     segment: null,
     sentences: null,
     settings: core.companionSettings(),
+    // The Timing Offset of a lesson: { key, offset, promise }. offset is null
+    // until it loads from storage.
+    timing: null,
+    // Timing Offset writes, one after another.
+    timingWrite: Promise.resolve(),
     statusControl: null,
     statusKind: null,
     // false, or the state ("play" or "pause") a sent command is settling into.
@@ -148,7 +158,9 @@
     state.playerState = core.PLAYER_STATES.UNSTARTED;
     state.playerTime = 0;
     state.segment = null;
+    state.cueAt = null;
     state.cueKey = null;
+    state.duration = null;
     state.navigation = null;
     state.boundaryArmed = false;
     cancelWait();
@@ -222,6 +234,8 @@
     focus: ["M4 9V4h5", "M20 9V4h-5", "M4 15v5h5", "M20 15v5h-5"],
     exitFocus: ["M9 4v5H4", "M15 4v5h5", "M9 20v-5H4", "M15 20v-5h5"],
     check: ["M5 12.5l4.5 4.5L19 7.5"],
+    minus: ["M6 12h12"],
+    plus: ["M6 12h12", "M12 6v12"],
     settings: [
       "M4 7h8",
       "M16 7h4",
@@ -336,7 +350,37 @@
     if (boundaryDelay.kind === "seconds") {
       control.querySelector(".lspc-seconds").value = String(boundaryDelay.seconds);
     }
+    renderTiming();
     renderPlayback();
+  }
+
+  // The Timing Offset buttons: each one's change to the lesson's offset.
+  const TIMING_STEPS = {
+    "shift-down": ({ shift }) => ({ shift: shift - 0.1 }),
+    "shift-up": ({ shift }) => ({ shift: shift + 0.1 }),
+    "shift-reset": () => ({ shift: 0 }),
+    "pad-down": ({ pad }) => ({ pad: pad - 0.05 }),
+    "pad-up": ({ pad }) => ({ pad: pad + 0.05 }),
+  };
+
+  function sameTiming(a, b) {
+    return a.shift === b.shift && a.pad === b.pad;
+  }
+
+  // The settings panel's Timing Offset rows show the active lesson's offset.
+  // A step that changes nothing, past a limit or a reset at 0, stays
+  // focusable and only looks unavailable.
+  function renderTiming() {
+    const panel = state.modeControl?.querySelector(".lspc-timing");
+    if (!panel) return;
+    const offset = state.timing?.offset ?? core.timingOffset();
+    const text = core.timingText(offset);
+    panel.querySelector("[data-value='shift']").textContent = text.shift;
+    panel.querySelector("[data-value='pad']").textContent = text.pad;
+    for (const button of panel.querySelectorAll("[data-step]")) {
+      const next = core.timingOffset({ ...offset, ...TIMING_STEPS[button.dataset.step](offset) });
+      button.setAttribute("aria-disabled", String(sameTiming(next, offset)));
+    }
   }
 
   // The Focus Mode controls that follow the player: Play or Pause, and the rate.
@@ -552,8 +596,60 @@
         NEIGHBOR_CHOICES,
         (value) => saveSettings({ neighborSentences: value === "on" }),
       ),
+      ...timingSection(),
     );
     return panel;
+  }
+
+  // The Timing Offset of this lesson: the shift in 0.1 s steps with a reset,
+  // and the pad in 0.05 s steps. Each change applies at once.
+  function timingSection() {
+    const title = element("div", "lspc-menu-heading", "Timing Offset");
+    title.id = "lspc-timing-heading";
+    const description = element(
+      "p",
+      "lspc-setting-description",
+      "Moves this lesson's sentences earlier or later. Pad lengthens both ends of each.",
+    );
+    const rows = element("div", "lspc-timing");
+    rows.setAttribute("role", "group");
+    rows.setAttribute("aria-labelledby", title.id);
+    // A stepper shows a minus or plus icon, and the reset its text.
+    const button = (step, label, text = "") => {
+      const node = element("button", text ? "lspc-timing-reset" : "lspc-step", text);
+      node.type = "button";
+      node.dataset.step = step;
+      node.setAttribute("aria-label", label);
+      if (!text) node.append(icon(ICONS[step.endsWith("up") ? "plus" : "minus"]));
+      node.addEventListener("click", () => {
+        const offset = state.timing?.offset;
+        if (offset) saveTiming(TIMING_STEPS[step](offset));
+      });
+      return node;
+    };
+    const value = (name) => {
+      const node = element("output", "lspc-timing-value");
+      node.dataset.value = name;
+      node.setAttribute("aria-labelledby", `lspc-timing-${name}`);
+      return node;
+    };
+    const name = (key, text) => {
+      const node = element("span", "lspc-menu-name", text);
+      node.id = `lspc-timing-${key}`;
+      return node;
+    };
+    rows.append(
+      name("shift", "Shift"),
+      button("shift-down", "Shift earlier by 0.1 s"),
+      value("shift"),
+      button("shift-up", "Shift later by 0.1 s"),
+      button("shift-reset", "Reset the shift", "Reset"),
+      name("pad", "Pad"),
+      button("pad-down", "Pad less by 0.05 s"),
+      value("pad"),
+      button("pad-up", "Pad more by 0.05 s"),
+    );
+    return [title, description, rows];
   }
 
   function countdownRing() {
@@ -781,12 +877,77 @@
     return state.cache.promise;
   }
 
+  // Loads the lesson's Timing Offset from storage once, into state.timing.
+  function timingFor(lesson) {
+    if (state.timing?.key !== lesson.key) {
+      const timing = { key: lesson.key, offset: null, promise: null };
+      timing.promise = chrome.storage.local
+        .get(core.TIMING_KEY)
+        .then((stored) => core.storedTiming(stored[core.TIMING_KEY], lesson.key))
+        .catch((error) => {
+          warnOnce(`could not load the Timing Offset for ${lesson.key}`, error);
+          return core.timingOffset();
+        })
+        .then((offset) => {
+          timing.offset ??= offset;
+        });
+      state.timing = timing;
+    }
+    return state.timing.promise;
+  }
+
+  // A Timing Offset change re-times the active sentence at once and saves the
+  // lesson's offset. Stored offsets are re-read before each write, so another
+  // lesson's change in another tab isn't lost.
+  function saveTiming(change) {
+    const timing = state.timing;
+    if (!timing?.offset) return;
+    const offset = core.timingOffset({ ...timing.offset, ...change });
+    if (sameTiming(offset, timing.offset)) return;
+    timing.offset = offset;
+    renderTiming();
+    void sync();
+    state.timingWrite = state.timingWrite
+      .then(() => chrome.storage.local.get(core.TIMING_KEY))
+      .then((stored) => {
+        const record = core.savedTiming(stored[core.TIMING_KEY], timing.key, offset, Date.now());
+        return Object.keys(record).length
+          ? chrome.storage.local.set({ [core.TIMING_KEY]: record })
+          : chrome.storage.local.remove(core.TIMING_KEY);
+      })
+      .catch((error) => warnOnce(`could not save the Timing Offset for ${timing.key}`, error));
+  }
+
   function postBridgeCommand(command) {
     if (command) window.postMessage(command, location.origin);
   }
 
+  // The active sentence's bounds changed with its Timing Offset. A play under
+  // way is retimed: the bridge keeps it inside the new bounds. A play still
+  // starting would report a time from the old bounds, so it starts again at
+  // the new start. A paused sentence is cued again at its new start.
+  function retimeCue(cue) {
+    const starting = state.synchronizing === "play" || Date.now() < state.playPendingUntil;
+    const expected = state.playbackQueue.at(-1)?.expectedState ?? state.playerState;
+    const playing = [core.PLAYER_STATES.PLAYING, core.PLAYER_STATES.BUFFERING].includes(expected);
+    if (starting) {
+      state.synchronizing = "play";
+      expectPlay();
+      state.ignoreResetUntil = Date.now() + 1000;
+    }
+    if (starting || !playing) state.boundaryArmed = false;
+    const type = starting ? "seek-play" : playing ? "retime" : "seek";
+    postBridgeCommand(core.bridgeCommand(type, state.generation, cue.segment));
+    state.cueKey = cue.key;
+  }
+
   function cuePending() {
     if (!state.ready || !state.pendingCue || state.pendingCue.key === state.cueKey) return;
+    if (state.pendingCue.at === state.cueAt && !state.pendingCue.play) {
+      retimeCue(state.pendingCue);
+      state.pendingCue = null;
+      return;
+    }
     const type = core.cueCommand(
       {
         play: state.pendingCue.play,
@@ -803,10 +964,15 @@
       expectPlay();
     }
     postBridgeCommand(
-      core.bridgeCommand(type, state.generation, state.pendingCue.segment),
+      core.bridgeCommand(
+        type,
+        state.generation,
+        state.pendingCue.continued ?? state.pendingCue.segment,
+      ),
     );
     state.ignoreResetUntil = Date.now() + 1000;
     state.boundaryArmed = false;
+    state.cueAt = state.pendingCue.at;
     state.cueKey = state.pendingCue.key;
     state.pendingCue = null;
   }
@@ -819,12 +985,17 @@
       return;
     }
 
-    const sentences = await sentencesFor(context.lesson);
+    const [sentences] = await Promise.all([
+      sentencesFor(context.lesson),
+      timingFor(context.lesson),
+    ]);
     if (revision !== state.revision) return;
     state.sentences = sentences;
+    // The offset as it is now, which a change in the settings panel replaces.
+    const offset = state.timing.offset;
 
-    const segment = core.initialCue(sentences, context.sentence.id, true);
-    if (!segment) {
+    const bounds = core.initialCue(sentences, context.sentence.id, true);
+    if (!bounds) {
       warnOnce(`invalid bounds for ${context.lesson.key}:${context.sentence.id}`);
       restoreLayout();
       return;
@@ -847,24 +1018,33 @@
     );
     mount(player);
     state.lessonKey = context.lesson.key;
-    state.segment = { start: segment.start, end: segment.end };
-    const key = `${context.lesson.key}:${segment.sentenceNumber}:${segment.start}:${segment.end}`;
-    const play =
-      state.navigation?.target === context.sentence.id && state.navigation.play;
-    if (state.navigation && context.sentence.id !== state.navigation.from) {
-      state.navigation = null;
-    }
-    state.pendingCue = { key, play, segment: state.segment };
-
     if (lifecycle === "bind") {
       state.frame = player.frame;
       state.ready = false;
+      state.cueAt = null;
       state.cueKey = null;
+      // The new player reports its own duration before it's ready.
+      state.duration = null;
       state.autoplayBlocked = false;
       state.generation += 1;
       setStatus("loading");
       postBridgeCommand(core.bridgeCommand("bind", state.generation));
     }
+    renderTiming();
+    const segment = core.offsetSegment(bounds, offset, state.duration);
+    state.segment = segment;
+    const at = `${context.lesson.key}:${bounds.sentenceNumber}`;
+    const key = `${at}:${segment.start}:${segment.end}`;
+    const play =
+      state.navigation?.target === context.sentence.id && state.navigation.play;
+    // The segment Continue plays: on through a padded overlap rather than
+    // back to the segment's start.
+    const resume = play ? state.navigation.resume : null;
+    const continued = resume ? core.continuedSegment(segment, resume.time, resume.after) : null;
+    if (state.navigation && context.sentence.id !== state.navigation.from) {
+      state.navigation = null;
+    }
+    state.pendingCue = { at, key, play, segment, continued };
     cuePending();
     renderVisibility();
   }
@@ -897,9 +1077,17 @@
     return true;
   }
 
-  function navigate(direction) {
+  // continuing: Continue moves on, so the next sentence may play on from
+  // where the video stopped (core.continuedSegment). The click arms the
+  // navigation again as LingQ's own, so resume is set after it.
+  function navigate(direction, continuing = false) {
     const owner = navigationOwner(direction);
-    if (owner && armNavigation(direction)) owner.click();
+    const after = state.segment?.end;
+    if (!owner || !armNavigation(direction)) return;
+    owner.click();
+    if (state.navigation && continuing) {
+      state.navigation.resume = { time: state.playerTime, after };
+    }
   }
 
   function navigateToSentence(sentenceNumber, play) {
@@ -1511,7 +1699,7 @@
   }
 
   function runBoundaryAction(action) {
-    if (action === "next") navigate("next");
+    if (action === "next") navigate("next", true);
     else if (action === "repeat") replayNow();
     else {
       state.synchronizing = "pause";
@@ -1550,7 +1738,7 @@
     );
     cancelWait();
     if (release === "next" && navigationOwner("next")) {
-      navigate("next");
+      navigate("next", true);
       return;
     }
     if (release === "repeat") {
@@ -1582,7 +1770,8 @@
         "[role='option'], [role='tab']",
     );
     const interactive = Boolean(interactiveTarget?.getClientRects().length);
-    const menu = Boolean(target?.closest?.(".lspc-menu"));
+    // The Playback Mode menu and the settings panel handle their own keys.
+    const menu = Boolean(target?.closest?.(".lspc-popover"));
     return { editable, interactive, menu };
   }
 
@@ -1609,6 +1798,13 @@
     if (event.type === "rate") {
       state.rate = event.detail.rate;
       renderPlayback();
+      return;
+    }
+
+    // The duration clamps a Timing Offset at the video's end.
+    if (event.type === "duration") {
+      state.duration = event.detail.duration;
+      scheduleSync();
       return;
     }
 
@@ -1695,6 +1891,7 @@
           event.detail.state,
         ),
         state.synchronizing,
+        { shift: state.timing?.offset?.shift ?? 0, segment: state.segment },
       );
       if (target) {
         navigateToSentence(target, event.detail.state === core.PLAYER_STATES.PLAYING);

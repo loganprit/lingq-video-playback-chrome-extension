@@ -27,6 +27,9 @@
   let liveEmbeds = null;
   let player = null;
   let ready = false;
+  // The video's duration last reported for this bind, which clamps a Timing
+  // Offset at the video's end.
+  let reportedDuration = null;
   const subscribed = new WeakSet();
 
   function emit(type, detail) {
@@ -171,6 +174,32 @@
     }, 50);
   }
 
+  function reportDuration() {
+    const duration = player?.getDuration?.();
+    if (!Number.isFinite(duration) || duration <= 0 || duration === reportedDuration) return;
+    reportedDuration = duration;
+    emit("duration", { duration });
+  }
+
+  // A Timing Offset changed while the segment plays. Inside the new bounds the
+  // play goes on, and the boundary watcher, which reads activeSegment, stops
+  // at the new end. An end now behind the video is reached at once, and a
+  // start still ahead of it is sought, so the play never runs outside the
+  // segment it now belongs to.
+  function retimeSegment(segment) {
+    activeSegment = segment;
+    if (!AUDIBLE_STATES.includes(player.getPlayerState?.())) return;
+    const currentTime = player.getCurrentTime();
+    if (currentTime >= segment.end) {
+      stopBoundaryWatcher();
+      emit("state", { state: core.PLAYER_STATES.ENDED, currentTime: segment.end });
+    } else if (currentTime < segment.start) {
+      stopBoundaryWatcher();
+      player.seekTo(segment.start, true);
+      player.playVideo();
+    }
+  }
+
   function seekSegment(segment, play) {
     if (!ready) return;
     try {
@@ -203,6 +232,7 @@
       return;
     }
     ready = true;
+    reportDuration();
     emit("ready");
   }
 
@@ -228,6 +258,7 @@
   function onStateChange(event) {
     if (event.target !== player || !ready) return;
     try {
+      reportDuration();
       const currentTime = event.target.getCurrentTime();
       if (event.data === core.PLAYER_STATES.PLAYING) {
         watchBoundary(currentTime);
@@ -336,6 +367,7 @@
 
   function bind(command) {
     generation = command.generation;
+    reportedDuration = null;
     const found = playerFrame();
     if (!found) {
       emit("error", { reason: "invalid-video" });
@@ -345,6 +377,7 @@
     if (found === frame && player) {
       ready &&= playerReady();
       if (ready) {
+        reportDuration();
         emit("ready");
       } else {
         waitForPlayer(generation);
@@ -379,6 +412,8 @@
           player[`${command.type}Video`]();
         } else if (command.type === "rate") {
           player.setPlaybackRate(command.rate);
+        } else if (command.type === "retime") {
+          retimeSegment(command.segment);
         } else {
           seekSegment(command.segment, command.type === "seek-play");
         }

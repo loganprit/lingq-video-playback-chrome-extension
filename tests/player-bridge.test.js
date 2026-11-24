@@ -497,6 +497,90 @@ test("reports rate changes again after the bound frame's embed reloads", () => {
   assert.deepEqual(bridge.events.at(-1), core.bridgeEvent("rate", 1, { rate: 0.75 }));
 });
 
+test("reports the video's duration before ready, once per bind", () => {
+  const existing = fakePlayer({ ready: true });
+  existing.getDuration = () => 612.4;
+  const bridge = loadBridge({ existing });
+
+  bridge.bind(1);
+  existing.fire("onStateChange", core.PLAYER_STATES.PAUSED);
+  bridge.bind(2);
+
+  assert.deepEqual(
+    bridge.events.filter((event) => event.type !== "state"),
+    [
+      core.bridgeEvent("duration", 1, { duration: 612.4 }),
+      core.bridgeEvent("ready", 1),
+      core.bridgeEvent("duration", 2, { duration: 612.4 }),
+      core.bridgeEvent("ready", 2),
+    ],
+  );
+});
+
+test("reports a duration the player learns only after ready", () => {
+  const existing = fakePlayer({ ready: true });
+  existing.getDuration = () => 0;
+  const bridge = loadBridge({ existing });
+
+  bridge.bind(1);
+  existing.getDuration = () => 612.4;
+  existing.fire("onStateChange", core.PLAYER_STATES.PLAYING);
+
+  assert.deepEqual(bridge.events.slice(0, 2), [
+    core.bridgeEvent("ready", 1),
+    core.bridgeEvent("duration", 1, { duration: 612.4 }),
+  ]);
+});
+
+test("moves a playing segment's Sentence Boundary on a retime without seeking", () => {
+  const existing = fakePlayer({ ready: true });
+  const seeks = [];
+  existing.seekTo = (time) => seeks.push(time);
+  const bridge = loadBridge({ existing });
+  bridge.bind(1);
+  existing.fire("onStateChange", core.PLAYER_STATES.PLAYING);
+  const before = bridge.events.length;
+
+  // The video stands at 12.5, inside the new bounds: the play goes on.
+  bridge.send(core.bridgeCommand("retime", 1, { start: 10, end: 14 }));
+  assert.equal(bridge.events.length, before);
+
+  // An end now behind the video is the Sentence Boundary at once.
+  bridge.send(core.bridgeCommand("retime", 1, { start: 9, end: 12 }));
+  assert.deepEqual(bridge.events.slice(before), [
+    core.bridgeEvent("state", 1, { state: core.PLAYER_STATES.ENDED, currentTime: 12 }),
+  ]);
+  assert.deepEqual(seeks, []);
+});
+
+test("seeks a playing segment to a new start still ahead of the video", () => {
+  const existing = fakePlayer({ ready: true });
+  const calls = [];
+  existing.seekTo = (time) => calls.push(`seek ${time}`);
+  existing.playVideo = () => calls.push("play");
+  const bridge = loadBridge({ existing });
+  bridge.bind(1);
+  existing.fire("onStateChange", core.PLAYER_STATES.PLAYING);
+  const before = bridge.events.length;
+
+  bridge.send(core.bridgeCommand("retime", 1, { start: 13, end: 16 }));
+
+  assert.deepEqual(calls, ["seek 13", "play"]);
+  assert.equal(bridge.events.length, before);
+});
+
+test("only takes a paused segment's new bounds on a retime", () => {
+  const existing = fakePlayer({ ready: true });
+  existing.playerState = core.PLAYER_STATES.PAUSED;
+  const bridge = loadBridge({ existing });
+  bridge.bind(1);
+  const before = bridge.events.length;
+
+  bridge.send(core.bridgeCommand("retime", 1, { start: 9, end: 12 }));
+
+  assert.equal(bridge.events.length, before);
+});
+
 const WORD = "https://s3.amazonaws.com/media.lingq.com/resources/tts/audio/esLucia_58e5b48a.mp3";
 
 test("plays the video quieter while LingQ reads a word aloud", () => {

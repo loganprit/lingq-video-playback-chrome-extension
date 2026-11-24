@@ -20,9 +20,9 @@ The extension adds four items to LingQ's footer, styled like LingQ's own *Page V
 - **Replay** replays the current sentence once (Replay Now).
 - **Playback Mode** shows what happens at the end of each sentence: *Pause at end*, *Continue at end*, or *Repeat at end*. Click it, or focus it and press `Enter` or an arrow key, to open its menu. In the menu, the arrow keys, `Home`, and `End` move, `Enter` or `Space` chooses, and `Escape` closes. The menu also lists the keyboard shortcuts. The choice is saved across reloads.
 - **Focus** enters Focus Mode (see below).
-- **Settings** opens the companion's settings panel: the Boundary Delay, Sentence Visibility, and Neighbor Sentences. Focus starts on the chosen delay. The arrow keys choose, `Tab` moves from the delay to the seconds list, Sentence Visibility, and Neighbor Sentences, and `Escape` or a click outside closes the panel. Keys pressed in the panel never reach LingQ, so `Escape` there doesn't also close a word card or the video.
+- **Settings** opens the companion's settings panel: the Boundary Delay, Sentence Visibility, Neighbor Sentences, and this lesson's Timing Offset. Focus starts on the chosen delay. The arrow keys choose, `Tab` moves from the delay to the seconds list, Sentence Visibility, Neighbor Sentences, and each Timing Offset button, and `Escape` or a click outside closes the panel. Keys pressed in the panel never reach LingQ, so `Escape` there doesn't also close a word card or the video.
 
-The Playback Mode and the settings are saved together in one record. An older install's saved Playback Mode carries over once.
+The Playback Mode and the settings are saved together in one record. An older install's saved Playback Mode carries over once. The Timing Offset is saved per lesson, apart from them.
 
 A short status appears just above the footer only while the video loads or when it needs you, for example to press Play after the browser blocked playback. Pausing at the end of a sentence in Pause mode shows nothing. Screen readers still hear "Video ready."
 
@@ -62,6 +62,19 @@ Neighbor Sentences show the next three sentences under the active one, dimmed, s
 - Under Show on Pause they show only while the sentence does, and keep their place while hidden. Under Listen First they never show, because you haven't heard the sentences after this one yet.
 - In tall windows the video is 4rem shorter to make room for them. It never gets smaller than in a shorter window, though: at 660px tall or less it keeps its short-window size, and up to 788px tall it holds 340px, the short-window size at 660px. In both ranges neighbors only take the height that's left over, so often none show below about 750px. Only the neighbors that fit above LingQ's *Show Translation* row show, so the video, the sentence, and the footer never move.
 
+## Timing Offset
+
+Some lessons' timestamps are early or late for every sentence, which clips each sentence's start or end. The Timing Offset in the settings panel fixes that for the lesson you're on. LingQ's own timestamps never change.
+
+- **Shift** moves every sentence of the lesson earlier (`−`) or later (`+`) in 0.1 s steps, up to 5 s either way. **Reset** puts it back at 0.0 s. The panel shows the current value, such as "+0.5 s".
+- **Pad** lengthens both ends of every sentence, from 0 to 0.5 s in 0.05 s steps, so first and last syllables aren't cut. It starts at 0.
+- Everything the companion plays uses the offset: the cued sentence, its end, Replay, Repeat, Continue, `N` and `P`, Neighbor Sentences, and a YouTube seek. It works the same in every Playback Mode and in Focus Mode.
+- A change applies at once. A sentence that's playing goes on and stops at its new end. If that end has already passed, it stops right away, and if its new start is still ahead, the video moves to that start. A play that's only starting starts again at the new start. A paused sentence is cued again at its new start, so Play then plays it with the new offset.
+- A seek picks the sentence by the shifted times. Pad isn't counted there, except that a time inside the active sentence's padded start or end, or up to 0.25 s before its start, keeps that sentence.
+- With a pad, one sentence's end can reach into the next one's start. Continue then plays on from where the first sentence stopped, so the overlap isn't heard twice. Without an overlap, Continue works as it does with no offset.
+- No sentence starts before 0 or ends after the video. One shifted past either end keeps its last 0.1 s there.
+- Offsets are saved per lesson. A lesson set back to no shift and no pad is removed from storage, and only the 200 most recently changed lessons are kept.
+
 ## Focus Mode
 
 Focus Mode fills the browser window with the video, LingQ's sentence, and the companion's controls, like LingQ's iPad and iPhone players. Click **Focus** in the footer to enter it. Click **Exit Focus** at the top right, or press `Escape`, to leave it. Leaving puts the page back exactly as it was. Focus Mode isn't saved: a reload starts in the normal layout.
@@ -86,7 +99,7 @@ Every Playback Mode and setting works the same in Focus Mode. LingQ's header, si
 | `P` | Go to the previous sentence |
 | `R` | Replay the current sentence once (also the **Replay** button) |
 
-Shortcuts are ignored for modified or repeated key presses and while an editable control owns focus. `N`, `P`, and `R` are also ignored while a button, link, or other interactive control owns focus. Clicking a companion button or menu option with the mouse returns focus to the page, so the letter keys keep working. `Space` still plays or pauses the video from a focused button or link, because LingQ would otherwise play its own lesson audio. Inside the open Playback Mode menu, `N`, `P`, `R`, and `Space` never trigger shortcuts. `Space` chooses the focused option, and the menu keeps its navigation keys from LingQ. On the Playback Mode button itself, `Escape` and `Space` never reach LingQ.
+Shortcuts are ignored for modified or repeated key presses and while an editable control owns focus. `N`, `P`, and `R` are also ignored while a button, link, or other interactive control owns focus. Clicking a companion button or menu option with the mouse returns focus to the page, so the letter keys keep working. `Space` still plays or pauses the video from a focused button or link, because LingQ would otherwise play its own lesson audio. Inside the open Playback Mode menu and the settings panel, `N`, `P`, `R`, and `Space` never trigger shortcuts. `Space` chooses the focused option or presses the focused button, and the menu keeps its navigation keys from LingQ. On the Playback Mode button itself, `Escape` and `Space` never reach LingQ.
 
 Outside Focus Mode, `Escape` anywhere else on the page closes the video, as it does in LingQ without the extension. Click LingQ's YouTube button to open the video again. In Focus Mode, `Escape` puts a word panel away and then leaves Focus Mode instead.
 
