@@ -1988,7 +1988,9 @@
     else if (target) pressWord(words[target.index]);
   }
 
-  // LingQ selects a word on a press and release over it.
+  // LingQ selects a word on a press and release over it. It keeps the press in
+  // React state, which settles after the press's task, so the release comes in
+  // a later task, as a real one does.
   function pressWord(word) {
     const box = word.getBoundingClientRect();
     const at = {
@@ -2004,9 +2006,11 @@
     const pointer = { pointerId: 1, pointerType: "mouse", isPrimary: true };
     word.dispatchEvent(new PointerEvent("pointerdown", { ...at, ...pointer, buttons: 1 }));
     word.dispatchEvent(new MouseEvent("mousedown", { ...at, buttons: 1 }));
-    word.dispatchEvent(new PointerEvent("pointerup", { ...at, ...pointer, buttons: 0 }));
-    word.dispatchEvent(new MouseEvent("mouseup", { ...at, buttons: 0 }));
-    word.dispatchEvent(new MouseEvent("click", { ...at, buttons: 0 }));
+    setTimeout(() => {
+      word.dispatchEvent(new PointerEvent("pointerup", { ...at, ...pointer, buttons: 0 }));
+      word.dispatchEvent(new MouseEvent("mouseup", { ...at, buttons: 0 }));
+      word.dispatchEvent(new MouseEvent("click", { ...at, buttons: 0 }));
+    }, 0);
   }
 
   document.addEventListener("keydown", handleShortcut, true);
