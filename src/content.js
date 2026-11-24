@@ -271,6 +271,7 @@
     [["Space"], "play/pause"],
     [["P", "N"], "prev/next"],
     [["R"], "replay"],
+    [["W"], "new word"],
   ];
 
   function element(tag, className, text) {
@@ -1964,7 +1965,48 @@
     if (action === "consume") return;
     if (action === "toggle") togglePlayback();
     else if (action === "next" || action === "previous") navigate(action);
+    else if (action === "new-word") openNewWord();
     else replayNow();
+  }
+
+  // W opens the active sentence's next new word the way a click does, so LingQ
+  // selects it and opens its word panel, and Auto LingQ creation saves it.
+  // LingQ marks a new word blue-word, and a selected phrase is a selected-text
+  // span around its words.
+  function openNewWord() {
+    const context = readerContext();
+    if (!context) return;
+    const words = [...context.sentence.querySelectorAll(".sentence-item")];
+    const target = core.newWordTarget(
+      words.map((word) => ({
+        new: word.classList.contains("blue-word"),
+        selected: word.classList.contains("is-selected") || Boolean(word.closest(".selected-text")),
+      })),
+      { hidden: !sentenceShown(context), guarded: Date.now() < state.revealGuard },
+    );
+    if (target?.kind === "reveal") requestReveal(context);
+    else if (target) pressWord(words[target.index]);
+  }
+
+  // LingQ selects a word on a press and release over it.
+  function pressWord(word) {
+    const box = word.getBoundingClientRect();
+    const at = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      view: window,
+      button: 0,
+      detail: 1,
+      clientX: box.left + box.width / 2,
+      clientY: box.top + box.height / 2,
+    };
+    const pointer = { pointerId: 1, pointerType: "mouse", isPrimary: true };
+    word.dispatchEvent(new PointerEvent("pointerdown", { ...at, ...pointer, buttons: 1 }));
+    word.dispatchEvent(new MouseEvent("mousedown", { ...at, buttons: 1 }));
+    word.dispatchEvent(new PointerEvent("pointerup", { ...at, ...pointer, buttons: 0 }));
+    word.dispatchEvent(new MouseEvent("mouseup", { ...at, buttons: 0 }));
+    word.dispatchEvent(new MouseEvent("click", { ...at, buttons: 0 }));
   }
 
   document.addEventListener("keydown", handleShortcut, true);
