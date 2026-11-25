@@ -500,12 +500,15 @@
       });
       menu.append(item);
     }
+    // Each shortcut keeps its keys and action together, and the line wraps
+    // only between shortcuts.
     const shortcuts = element("p", "lspc-menu-shortcuts");
-    SHORTCUTS.forEach(([keys, action], index) => {
-      if (index) shortcuts.append(" · ");
-      for (const key of keys) shortcuts.append(element("kbd", "", key), " ");
-      shortcuts.append(action);
-    });
+    for (const [keys, action] of SHORTCUTS) {
+      const shortcut = element("span", "lspc-shortcut");
+      for (const key of keys) shortcut.append(element("kbd", "", key), " ");
+      shortcut.append(action);
+      shortcuts.append(shortcut, " ");
+    }
     popover.append(heading, menu, shortcuts);
     return popover;
   }

@@ -513,11 +513,18 @@
 }
 
 .lspc-menu-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
   margin: 4px 10px 6px;
   padding-top: 8px;
   border-top: 1px solid rgb(127 127 127 / 18%);
   font-size: 0.75rem;
   opacity: 0.68;
+}
+
+.lspc-shortcut {
+  white-space: nowrap;
 }
 
 .lspc-menu-shortcuts kbd {

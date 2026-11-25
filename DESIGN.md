@@ -155,7 +155,7 @@ Footer items and menu options use an 8px radius, the menu 12px, and shortcut key
 - **Popover:** opens 8px above the button and aligns to its right edge, so it never overflows the viewport's right side. It fades and rises 4px over 120ms, with no motion under `prefers-reduced-motion`.
 - **Heading:** "At the end of each sentence", a caption that labels the menu.
 - **Options:** Pause, Continue, and Repeat as `menuitemradio`s, each with an icon, a bold name, a one-line description, and a check on the current one.
-- **Shortcuts line:** the page shortcuts as key chips under a hairline: Space, P and N, R, and W for the next new word. It replaces the separate help button.
+- **Shortcuts line:** the page shortcuts as key chips under a hairline: Space, P and N, R, and W for the next new word. Each shortcut keeps its keys and action together, 12px apart with no separator, and the line wraps only between shortcuts. It replaces the separate help button.
 - **Keyboard:** the arrow keys move with wrap-around, Home and End jump, Enter or Space chooses, Escape closes, and Tab closes and moves on. Choosing from the keyboard returns focus to the button. Choosing with the mouse returns focus to the page, so the letter shortcuts keep working.
 
 ### Boundary Delay Countdown
