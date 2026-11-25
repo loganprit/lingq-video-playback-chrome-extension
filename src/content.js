@@ -1991,11 +1991,28 @@
     else if (target) pressWord(words[target.index]);
   }
 
+  // Where a click on the word lands: the middle of its first line, so a word
+  // wrapped over two lines is still hit. null when something above the
+  // sentence, such as one of LingQ's dialogs, would take the click. LingQ's
+  // floating word card doesn't count: a press on the next word replaces it.
+  function pressPoint(word) {
+    const line = word.getClientRects()[0];
+    if (!line) return null;
+    const point = { clientX: line.left + line.width / 2, clientY: line.top + line.height / 2 };
+    const top = document.elementFromPoint(point.clientX, point.clientY);
+    return word.contains(top) || top?.closest?.(".reader-widget.is-floating") ? point : null;
+  }
+
   // LingQ selects a word on a press and release over it. It keeps the press in
-  // React state, which settles after the press's task, so the release comes in
-  // a later task, as a real one does.
+  // React state, which React settles in a microtask after the press, so the
+  // release follows in a later microtask. Both run before any other task, so
+  // no sentence change or player message can come between them. If the word
+  // was drawn again in between, the release goes to its new copy, so LingQ
+  // isn't left holding the press. Only a word removed within that same
+  // microtask run, which nothing of LingQ's does on a press, gets no release.
   function pressWord(word) {
-    const box = word.getBoundingClientRect();
+    const point = pressPoint(word);
+    if (!point) return;
     const at = {
       bubbles: true,
       cancelable: true,
@@ -2003,17 +2020,18 @@
       view: window,
       button: 0,
       detail: 1,
-      clientX: box.left + box.width / 2,
-      clientY: box.top + box.height / 2,
+      ...point,
     };
     const pointer = { pointerId: 1, pointerType: "mouse", isPrimary: true };
     word.dispatchEvent(new PointerEvent("pointerdown", { ...at, ...pointer, buttons: 1 }));
     word.dispatchEvent(new MouseEvent("mousedown", { ...at, buttons: 1 }));
-    setTimeout(() => {
-      word.dispatchEvent(new PointerEvent("pointerup", { ...at, ...pointer, buttons: 0 }));
-      word.dispatchEvent(new MouseEvent("mouseup", { ...at, buttons: 0 }));
-      word.dispatchEvent(new MouseEvent("click", { ...at, buttons: 0 }));
-    }, 0);
+    queueMicrotask(() => {
+      const release = word.isConnected ? word : document.getElementById(word.id);
+      if (!release) return;
+      release.dispatchEvent(new PointerEvent("pointerup", { ...at, ...pointer, buttons: 0 }));
+      release.dispatchEvent(new MouseEvent("mouseup", { ...at, buttons: 0 }));
+      release.dispatchEvent(new MouseEvent("click", { ...at, buttons: 0 }));
+    });
   }
 
   document.addEventListener("keydown", handleShortcut, true);
